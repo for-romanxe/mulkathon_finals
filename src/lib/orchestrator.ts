@@ -21,7 +21,7 @@ async function loadOd(): Promise<OdRow[] | null> {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 // B3(#29) — OD 물량·톤킬로 조회
-export async function b3OdLookup(input: { from: string; to: string; item?: string }) {
+export async function b3OdLookup(input: { from: string; to: string }) {
   const od = await loadOd();
   if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
   const row = od.find((r) => r.from === input.from && r.to === input.to);
@@ -33,9 +33,6 @@ export async function b3OdLookup(input: { from: string; to: string; item?: strin
     tonkm: r1(row.tkm),
     km: row.km,
     container_ton: r1(row.container_ton),
-    ...(input.item && input.item !== "컨테이너"
-      ? { note: "품목 세분은 컨테이너 톤만 제공 — 나머지는 전체 합계 기준" }
-      : {}),
   };
 }
 
@@ -73,7 +70,6 @@ export const TOOLS = [
       properties: {
         from: { type: "string", description: "출발역명 (예: 구미)" },
         to: { type: "string", description: "도착역명 (예: 부산진)" },
-        item: { type: "string", description: "품목 대분류 (예: 컨테이너). 생략하면 전체" },
       },
       required: ["from", "to"],
     },
@@ -110,10 +106,30 @@ export const TOOLS = [
   },
 ];
 
+// C1·C2는 B3가 실제로 반환한 톤킬로만 받는다. 이 검사가 없으면 LLM이 지어낸 톤킬로로
+// 편익이 계산되고, 그건 "숫자 계산을 LLM에 시키지 않는다"(#39)가 깨진 것이다.
+// 반환값이 null이 아니면 도구를 실행하지 않고 이 값을 그대로 도구 결과로 돌려준다.
+export function gateTool(
+  name: string,
+  input: Record<string, unknown>,
+  trace: { tool: string; output: unknown }[],
+): { blocked: true; note: string } | null {
+  if (name !== "c1_env_benefit" && name !== "c2_social_benefit") return null;
+  const fromB3 = trace
+    .filter((t) => t.tool === "b3_od_lookup")
+    .map((t) => (t.output as { tonkm?: number }).tonkm)
+    .filter((v): v is number => typeof v === "number");
+  if (!fromB3.length)
+    return { blocked: true, note: "b3_od_lookup을 먼저 호출할 것 — 편익은 B3가 반환한 톤킬로로만 계산한다" };
+  if (typeof input.tonkm !== "number" || !fromB3.includes(input.tonkm))
+    return { blocked: true, note: `tonkm이 B3 반환값과 다르다 (B3가 준 값: ${fromB3.join(", ")}) — 그 값을 그대로 넣을 것` };
+  return null;
+}
+
 export async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "b3_od_lookup":
-      return b3OdLookup(input as { from: string; to: string; item?: string });
+      return b3OdLookup(input as { from: string; to: string });
     case "b4_directional":
       return b4Directional(input as { from: string; to: string });
     case "c1_env_benefit":

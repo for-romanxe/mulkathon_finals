@@ -1,6 +1,6 @@
 // D1(#39): 라우팅 루프 — LLM이 도구를 고르고, 코드가 계산하고, LLM이 결과만 서술한다.
 import Anthropic from "@anthropic-ai/sdk";
-import { TOOLS, runTool } from "@/lib/orchestrator";
+import { TOOLS, runTool, gateTool } from "@/lib/orchestrator";
 
 const SYSTEM = `너는 코레일 영업 담당자가 화주 미팅에서 쓰는 철도 전환 편익 오케스트레이터다.
 규칙:
@@ -43,7 +43,8 @@ export async function POST(req: Request) {
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const block of res.content) {
       if (block.type !== "tool_use") continue;
-      const output = await runTool(block.name, block.input as Record<string, unknown>);
+      const input = block.input as Record<string, unknown>;
+      const output = gateTool(block.name, input, trace) ?? (await runTool(block.name, input));
       trace.push({ tool: block.name, input: block.input, output });
       results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(output) });
     }

@@ -1,0 +1,100 @@
+// B5(#33) — 복화 가능성 필터.
+//
+// v2의 핵심 발견이 여기 있다: **편방향이라고 다 채울 수 있는 게 아니다.**
+// 편방향 구간의 도착역이 *같은 품목*을 어딘가로 내보내고 있어야, 그 화차를 돌려
+// 채운다는 말이 성립한다. 그렇지 않으면 구조적 편방향이고 복화는 처방이 아니다.
+//
+// IDEA.md: "복화로 실제 채울 수 있는 구간은 전체의 7%뿐. 과장하지 않는다"
+import type { OdRow } from "./od";
+
+export type BackhaulCandidate = {
+  from: string;
+  to: string;
+  item: string;
+  ton: number;
+};
+
+export type BackhaulSummary = {
+  one_way_pairs: number;
+  one_way_ton: number;
+  /** 도착역이 같은 품목을 내보내는 편방향 쌍 */
+  matched_pairs: number;
+  matched_ton: number;
+  /** 편방향 물량 대비 복화 가능 물량 비중 — 발표 헤드라인 */
+  matched_ton_pct: number;
+  candidates: BackhaulCandidate[];
+};
+
+const r1 = (x: number) => Math.round(x * 10) / 10;
+const key = (from: string, to: string) => from + "\u0000" + to;
+
+/** 각 역이 실제로 내보내는 품목 집합. 물량 0인 항목은 "내보낸다"고 보지 않는다. */
+function shippedItemsByStation(rows: readonly OdRow[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const row of rows) {
+    for (const [item, ton] of Object.entries(row.items ?? {})) {
+      if (!ton) continue;
+      const set = out.get(row.from) ?? new Set<string>();
+      set.add(item);
+      out.set(row.from, set);
+    }
+  }
+  return out;
+}
+
+/** 편방향 = 역방향 레코드 부재. IDEA.md의 249쌍·63.5%가 이 기준으로 나온 값이다. */
+function oneWayRows(rows: readonly OdRow[]): OdRow[] {
+  const present = new Set(rows.map((r) => key(r.from, r.to)));
+  return rows.filter((r) => !present.has(key(r.to, r.from)));
+}
+
+/** 전 노선 복화 가능성 집계. 발표 헤드라인(7%)이 여기서 나온다. */
+export function summarizeBackhaul(rows: readonly OdRow[]): BackhaulSummary {
+  const ships = shippedItemsByStation(rows);
+  const oneWay = oneWayRows(rows);
+  const oneWayTon = oneWay.reduce((s, r) => s + r.ton, 0);
+
+  const candidates: BackhaulCandidate[] = [];
+  let matchedPairs = 0;
+  let matchedTon = 0;
+
+  for (const row of oneWay) {
+    const atDest = ships.get(row.to);
+    if (!atDest) continue;
+    const matched = Object.entries(row.items ?? {}).filter(([item, ton]) => ton && atDest.has(item));
+    if (!matched.length) continue;
+    matchedPairs += 1;
+    for (const [item, ton] of matched) {
+      matchedTon += ton;
+      candidates.push({ from: row.from, to: row.to, item, ton: r1(ton) });
+    }
+  }
+
+  candidates.sort((a, b) => b.ton - a.ton);
+  return {
+    one_way_pairs: oneWay.length,
+    one_way_ton: r1(oneWayTon),
+    matched_pairs: matchedPairs,
+    matched_ton: r1(matchedTon),
+    matched_ton_pct: oneWayTon ? r1((matchedTon / oneWayTon) * 100) : 0,
+    candidates,
+  };
+}
+
+/** 한 구간의 복화 가능성. 화주 질문에 답하는 자리. */
+export function backhaulFor(
+  rows: readonly OdRow[],
+  input: { from: string; to: string },
+): { matched: BackhaulCandidate[] } | null {
+  // 편방향 판정(one_way)은 여기서 내지 않는다 — b4_directional이 정본이다.
+  // 집계는 레코드 기준, 화주 답변은 톤 기준이라(#90) 같은 이름으로 두 뜻을 쓰면 섞인다.
+  const row = rows.find((r) => r.from === input.from && r.to === input.to);
+  if (!row) return null;
+
+  const atDest = shippedItemsByStation(rows).get(input.to) ?? new Set<string>();
+  const matched = Object.entries(row.items ?? {})
+    .filter(([item, ton]) => ton && atDest.has(item))
+    .map(([item, ton]) => ({ from: input.from, to: input.to, item, ton: r1(ton) }));
+
+  return { matched };
+}

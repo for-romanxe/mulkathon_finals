@@ -3,10 +3,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { lookupOd, type OdRow } from "./calc/od";
+import { classifyDirectional } from "./calc/directional";
+import { summarizeBackhaul, backhaulFor } from "./calc/backhaul";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
 import { calculateSocialBenefit } from "./calc/social-benefit";
-import { SOCIAL_UNIT_COSTS, missingUnitCosts } from "./calc/unit-costs";
+import { SOCIAL_UNIT_COSTS, missingUnitCosts, ENV_UNIT_COSTS, missingEnvUnitCosts } from "./calc/unit-costs";
+import { calculateEnvBenefit } from "./calc/env-benefit";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
 let odCache: OdRow[] | null = null;
@@ -79,26 +82,113 @@ export async function b3OdLookup(input: { from: string; to: string; item?: strin
   return { found: true, ...result };
 }
 
-// B4(#31) — 편방향 판정: 정방향 vs 역방향 톤 비교
+// B4(#31·#90) — 편방향 판정.
+//
+// 편방향 정의가 두 개인데, **둘 다 참이고 뜻이 다르다**(#90에서 주영 결정).
+//  - `one_way` (역방향 톤 0)   → 화주에게 나가는 판정. 돌아오는 물량이 없다.
+//  - `reverse_route_exists`    → 그 방향 운행 자체는 통계에 잡힌다. 화차가 돈다.
+// 둘이 갈리는 39쌍 중 화면에 올라올 수 있는 건 4쌍(약목→오송 등)이고, 거기서
+// "돌아오는 물량은 0인데 운행은 있다"가 복화 판단의 핵심 정보다. 하나로 뭉개면 잃는다.
+//
+// 집계 헤드라인(편방향 249쌍·63.5%)은 레코드 기준으로만 재현된다 — IDEA.md에 박힌 값이다.
 export async function b4Directional(input: { from: string; to: string }) {
   const od = await loadOd();
   if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+
+  // 정방향 레코드 존재 여부는 classifyDirectional이 정본이다(#88).
+  const cls = classifyDirectional(od, input);
+  if (!cls)
+    return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+
   const ton = (a: string, b: string) => od.find((r) => r.from === a && r.to === b)?.ton ?? 0;
   const fwd = ton(input.from, input.to);
   const rev = ton(input.to, input.from);
-  if (!fwd && !rev) return { found: false, note: "양방향 모두 수송통계에 없음" };
+  if (!fwd && !rev)
+    return { found: false, note: `${input.from}→${input.to} 구간은 양방향 모두 물량 0 — 판정할 실적이 없다` };
+
   return {
     found: true,
     forward_ton: r1(fwd),
     reverse_ton: r1(rev),
     reverse_share_pct: r1((rev / (fwd + rev)) * 100),
     one_way: rev === 0,
+    // 역방향 운행이 통계에 잡히는가. one_way와 갈리면 "물량은 0인데 화차는 돈다"는 뜻이다.
+    reverse_route_exists: !cls.one_way,
   };
 }
 
-// C1(#35) — 원단위 확정 전 스텁. 수치를 지어내지 않는다.
+// B5(#33) — 복화 가능성. v2의 핵심 발견이 나오는 자리다.
+// 편방향이라고 다 채울 수 있는 게 아니다 — 도착역이 같은 품목을 내보내야 성립한다.
+export async function b5Backhaul(input: { from?: string; to?: string }) {
+  const od = await loadOd();
+  if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+
+  // 구간 지정이 없으면 전 노선 집계 — 발표 헤드라인(7%)이 이쪽이다.
+  if (!input.from || !input.to) {
+    const s = summarizeBackhaul(od);
+    return {
+      found: true,
+      scope: "전 노선",
+      one_way_pairs: s.one_way_pairs,
+      one_way_ton: s.one_way_ton,
+      backhaul_possible_pairs: s.matched_pairs,
+      backhaul_possible_ton: s.matched_ton,
+      backhaul_possible_pct: s.matched_ton_pct,
+      top_candidates: s.candidates.slice(0, 5),
+      note: "편방향 물량 중 도착역이 같은 품목을 내보내는 비중. 나머지는 구조적 편방향이라 복화로 못 채운다.",
+    };
+  }
+
+  const r = backhaulFor(od, { from: input.from, to: input.to });
+  if (!r)
+    return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+  return {
+    found: true,
+    scope: `${input.from}→${input.to}`,
+    backhaul_possible: r.matched.length > 0,
+    matched_items: r.matched,
+    note: r.matched.length
+      ? "도착역이 같은 품목을 내보내고 있어 복화 여지가 있다"
+      : "도착역이 같은 품목을 내보내지 않는다 — 구조적 편방향이라 복화로 채울 수 없다",
+  };
+}
+
+// C1(#35) — 환경 편익. C2(#37)와 같은 구조다: 계산은 calc/env-benefit.ts,
+// 원단위는 unit-costs.ts에서 주입. 값이 없으면 금액 대신 **무엇이 없는지**를 말한다.
 export function c1EnvBenefit(input: { tonkm: number }) {
-  return { stub: true, need: "탄소·대기오염 원단위(원/톤킬로) — 국토부 투자평가지침에서 확정(#35)", tonkm: input.tonkm };
+  const missing = missingEnvUnitCosts();
+  if (missing.length)
+    return {
+      stub: true,
+      need: `환경 편익은 원단위가 확정돼야 산출된다 (#92). 남은 값: ${missing.join(" · ")}`,
+      formula: "탄소 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000 · 대기오염 = 톤킬로 × (도로 − 철도 비용원단위)",
+      tonkm: input.tonkm,
+    };
+
+  const u = ENV_UNIT_COSTS;
+  try {
+    const e = calculateEnvBenefit({
+      tonkm: input.tonkm,
+      railCo2GPerTonKm: u.railCo2GPerTonKm as number,
+      roadCo2GPerTonKm: u.roadCo2GPerTonKm as number,
+      railAirCostPerTonKm: u.railAirCostPerTonKm as number,
+      roadAirCostPerTonKm: u.roadAirCostPerTonKm as number,
+      unitCostSource: u.source as string,
+    });
+    return {
+      stub: false,
+      avoided_co2_ton: r1(e.avoidedCo2Ton),
+      avoided_air_pollution_cost_won: Math.round(e.avoidedAirPollutionCost),
+      basis: e.basis,
+    };
+  } catch (err) {
+    // RangeError가 요청 전체를 500으로 만들지 않게 한다 — C2와 같은 처리(#87).
+    return {
+      stub: true,
+      need: `환경 편익을 계산할 수 없다: ${err instanceof Error ? err.message : String(err)}`,
+      tonkm: input.tonkm,
+    };
+  }
 }
 
 // C2(#37) — 승빈이 만든 calc/social-benefit.ts 를 실제로 연결한다.
@@ -170,7 +260,7 @@ export const TOOLS = [
   {
     name: "c1_env_benefit",
     description:
-      "도로 대비 철도 전환의 환경 편익(탄소·대기오염)을 톤킬로 기준으로 계산한다. " +
+      "도로 대비 철도 전환의 환경 편익을 계산한다 — 줄어드는 탄소 배출(톤)과 대기오염 비용(원). " +
       "사용자가 편익·환경 효과·탄소를 물었을 때만 호출한다. 물량·방향·복화만 묻는 질문에는 호출하지 않는다.",
     input_schema: {
       type: "object" as const,
@@ -195,7 +285,10 @@ export const TOOLS = [
   },
   {
     name: "b4_directional",
-    description: "구간의 편방향 여부를 판정한다(정방향·역방향 톤, 역방향 비중). 복화 가능성 언급 전 반드시 호출.",
+    description:
+      "구간의 편방향 여부를 판정한다. one_way는 역방향 물량이 0인지(화주 판정), " +
+      "reverse_route_exists는 역방향 운행이 통계에 잡히는지다. 둘이 갈리면 '돌아오는 물량은 없지만 화차는 도는' 구간이라 " +
+      "복화 여지를 다르게 말해야 한다. 복화 가능성 언급 전 반드시 호출.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -203,6 +296,21 @@ export const TOOLS = [
         to: { type: "string", description: "도착역명" },
       },
       required: ["from", "to"],
+    },
+  },
+  {
+    name: "b5_backhaul",
+    description:
+      "복화(왕복 적재) 가능성을 판정한다. 편방향 구간의 도착역이 같은 품목을 내보내고 있어야 복화가 성립한다. " +
+      "from·to를 주면 그 구간을, 생략하면 전 노선 집계(편방향 물량 중 복화 가능 비중)를 준다. " +
+      "복화·빈 화차·왕복을 물었을 때 호출한다. 편방향 판정 자체는 b4_directional이 정본이다.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        from: { type: "string", description: "출발역명. 생략하면 전 노선 집계" },
+        to: { type: "string", description: "도착역명. 생략하면 전 노선 집계" },
+      },
+      required: [],
     },
   },
   {
@@ -292,6 +400,8 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return b1DwellBreakdown();
     case "b2_x_factor":
       return b2XFactor();
+    case "b5_backhaul":
+      return b5Backhaul(input as { from?: string; to?: string });
     default:
       return { error: `알 수 없는 도구: ${name}` };
   }

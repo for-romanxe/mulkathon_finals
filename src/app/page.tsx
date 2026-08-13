@@ -11,6 +11,9 @@ const TOOL_LABEL: Record<string, string> = {
   c1_env_benefit: "C1 환경 편익",
   c2_social_benefit: "C2 사회 편익",
   b4_directional: "B4 편방향 판정",
+  b5_backhaul: "B5 복화 가능성",
+  b1_dwell_breakdown: "B1 체류시간",
+  b2_x_factor: "B2 X-factor",
 };
 
 type Card = { title: string; rows: [string, string][]; source: string; muted?: boolean };

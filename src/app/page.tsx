@@ -20,13 +20,13 @@ function cardsFromTrace(trace: Trace[]): Card[] {
   const cards: Card[] = [];
   const last = (name: string) => [...trace].reverse().find((t) => t.tool === name);
   const b3 = last("b3_od_lookup")?.output as
-    | { found?: boolean; ton?: number; tonkm?: number; km?: number; records?: number }
+    | { found?: boolean; ton?: number; tonkm?: number; km?: number }
     | undefined;
   if (b3?.found)
     cards.push({
       title: "물량·거리",
       rows: [["연간 물량", `${b3.ton?.toLocaleString()}톤`], ["톤킬로", `${b3.tonkm?.toLocaleString()}`], ["평균 거리", `${b3.km}km`]],
-      source: `2025 수송통계 O-D ${b3.records}건 — 코드 계산`,
+      source: "2025 수송통계 O-D — 코드 계산",
     });
   const b4 = last("b4_directional")?.output as
     | { found?: boolean; forward_ton?: number; reverse_ton?: number; reverse_share_pct?: number; one_way?: boolean }

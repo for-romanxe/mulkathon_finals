@@ -10,8 +10,7 @@ fail() { echo "SMOKE FAIL: $1" >&2; exit 1; }
 if [ -f package.json ]; then
   npm install --silent --no-audit --no-fund || fail "npm install"
   # build 존재 여부는 package.json을 직접 읽어 판정한다.
-  # `npm run | grep` 은 npm의 사람용 출력 서식에 의존해서, 서식이 바뀌면
-  # 빌드를 조용히 건너뛰면서도 SMOKE OK 를 찍는다.
+  # `npm run | grep`은 npm의 사람용 출력 서식에 의존해서, 서식이 바뀌면 빌드를 조용히 건너뛴다.
   if python3 -c "import json,sys; sys.exit(0 if 'build' in json.load(open('package.json')).get('scripts',{}) else 1)"; then
     npm run build --silent || fail "npm run build"
   fi

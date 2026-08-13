@@ -43,7 +43,7 @@ export function calculateSocialBenefit(input: SocialBenefitInput): SocialBenefit
       roadCostPerTonKm: input.roadCostPerTonKm,
       railCostPerTonKm: input.railCostPerTonKm,
       unitCostSource: input.unitCostSource,
-      formula: "톤킬로 × (도로 사회·환경비용 원단위 − 철도 사회·환경비용 원단위)",
+      formula: "운송량 × 거리에 도로·철도 각각의 국토교통부 공식 기준값을 곱해 그 차액을 냅니다",
     },
   };
 }

@@ -70,7 +70,14 @@ function cardsFromTrace(trace: Trace[]): Card[] {
     | { stub?: boolean; need?: string; formula?: string; avoided_co2_ton?: number; avoided_air_pollution_cost_won?: number }
     | undefined;
   const c2 = last("c2_social_benefit")?.output as
-    | { stub?: boolean; need?: string; avoided_accident_cost_won?: number; avoided_congestion_cost_won?: number }
+    | {
+        stub?: boolean;
+        need?: string;
+        road_social_environmental_cost_won?: number;
+        rail_social_environmental_cost_won?: number;
+        total_social_benefit_won?: number;
+        basis?: { unitCostSource?: string };
+      }
     | undefined;
   if (c1 && !c1.stub)
     cards.push({
@@ -83,12 +90,13 @@ function cardsFromTrace(trace: Trace[]): Card[] {
     });
   if (c2 && !c2.stub)
     cards.push({
-      title: "교통사고·도로혼잡 절감",
+      title: "사회·환경비용 절감",
       rows: [
-        ["사고 감소 효과", `${c2.avoided_accident_cost_won?.toLocaleString()}원`],
-        ["혼잡 감소 효과", `${c2.avoided_congestion_cost_won?.toLocaleString()}원`],
+        ["도로로 보낼 때", `${c2.road_social_environmental_cost_won?.toLocaleString()}원`],
+        ["철도로 보낼 때", `${c2.rail_social_environmental_cost_won?.toLocaleString()}원`],
+        ["절감액", `${c2.total_social_benefit_won?.toLocaleString()}원`],
       ],
-      source: "국토교통부 교통시설 투자평가지침 기준",
+      source: c2.basis?.unitCostSource ?? "전환교통지원사업 공모 설명자료",
     });
   const pending = [c1, c2].find((x) => x?.stub);
   if (pending)

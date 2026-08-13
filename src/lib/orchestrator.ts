@@ -8,7 +8,13 @@ import { summarizeBackhaul, backhaulFor } from "./calc/backhaul";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
 import { calculateSocialBenefit } from "./calc/social-benefit";
-import { SOCIAL_UNIT_COSTS, missingUnitCosts, ENV_UNIT_COSTS, missingEnvUnitCosts } from "./calc/unit-costs";
+import {
+  SOCIAL_UNIT_COSTS,
+  missingUnitCosts,
+  ENV_UNIT_COSTS,
+  missingEnvUnitCosts,
+  co2ReductionPct,
+} from "./calc/unit-costs";
 import { calculateEnvBenefit } from "./calc/env-benefit";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
@@ -157,13 +163,19 @@ export async function b5Backhaul(input: { from?: string; to?: string }) {
 // 원단위는 unit-costs.ts에서 주입. 값이 없으면 금액 대신 **무엇이 없는지**를 말한다.
 export function c1EnvBenefit(input: { tonkm: number }) {
   const missing = missingEnvUnitCosts();
-  if (missing.length)
+  if (missing.length) {
+    // 절대 원단위가 없어도 **비율은 주최측 자료로 확정돼 있다**. 배출 톤수는 못 내지만
+    // 감축률은 낼 수 있다 — 지어내지 않고 답할 수 있는 최대치가 여기까지다.
+    const pct = co2ReductionPct();
     return {
       stub: true,
-      need: `환경 편익은 원단위가 확정돼야 산출된다 (#92). 남은 값: ${missing.join(" · ")}`,
-      formula: "탄소 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000 · 대기오염 = 톤킬로 × (도로 − 철도 비용원단위)",
+      co2_reduction_pct: pct,
+      co2_ratio_source: pct === null ? null : ENV_UNIT_COSTS.source,
+      need: `배출 절대량(톤)과 대기오염 비용은 원단위가 확정돼야 산출된다 (#92). 남은 값: ${missing.join(" · ")}`,
+      formula: "감축률 = 1 − (철도 ÷ 도로 원단위) · 절대 배출 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000",
       tonkm: input.tonkm,
     };
+  }
 
   const u = ENV_UNIT_COSTS;
   try {

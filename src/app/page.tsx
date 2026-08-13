@@ -10,10 +10,10 @@ type Trace = { tool: string; input: unknown; output: unknown };
 type Msg = { role: "user" | "assistant"; text: string; trace?: Trace[]; isError?: boolean };
 
 const TOOL_LABEL: Record<string, string> = {
-  b3_od_lookup: "B3 물량 조회",
-  c1_env_benefit: "C1 환경 편익",
-  c2_social_benefit: "C2 사회 편익",
-  b4_directional: "B4 편방향 판정",
+  b3_od_lookup: "실제 운송 실적 조회",
+  c1_env_benefit: "탄소·대기오염 절감 계산",
+  c2_social_benefit: "교통사고·혼잡 절감 계산",
+  b4_directional: "돌아오는 화물 확인",
   b5_backhaul: "B5 복화 가능성",
   b1_dwell_breakdown: "B1 체류시간",
   b2_x_factor: "B2 X-factor",
@@ -57,13 +57,13 @@ function cardsFromTrace(trace: Trace[]): Card[] {
     | undefined;
   if (b4?.found)
     cards.push({
-      title: b4.one_way ? "방향 — 편방향 구간" : "방향",
+      title: b4.one_way ? "돌아올 때 실을 화물 — 없음" : "돌아올 때 실을 화물",
       rows: [
-        ["정방향", `${b4.forward_ton?.toLocaleString()}톤`],
-        ["역방향", `${b4.reverse_ton?.toLocaleString()}톤`],
-        ["역방향 비중", `${b4.reverse_share_pct}%`],
+        ["보내는 방향", `${Math.round(b4.forward_ton ?? 0).toLocaleString()}톤`],
+        ["돌아오는 방향", `${Math.round(b4.reverse_ton ?? 0).toLocaleString()}톤`],
+        ["왕복 활용도", `${b4.reverse_share_pct}%`],
       ],
-      source: "2025 수송통계 O-D — 코드 계산",
+      source: "2025년 실제 운송실적에서 집계",
     });
   // 편익 — 원단위가 들어오면 금액이, 아직이면 무엇이 없는지가 나온다
   const c1 = last("c1_env_benefit")?.output as
@@ -74,28 +74,28 @@ function cardsFromTrace(trace: Trace[]): Card[] {
     | undefined;
   if (c1 && !c1.stub)
     cards.push({
-      title: "환경 편익",
+      title: "탄소·대기오염 절감",
       rows: [
-        ["감축 탄소", `${c1.avoided_co2_ton?.toLocaleString()}톤`],
-        ["대기오염 절감", `${c1.avoided_air_pollution_cost_won?.toLocaleString()}원`],
+        ["줄어드는 탄소", `${c1.avoided_co2_ton?.toLocaleString()}톤`],
+        ["대기오염 절감액", `${c1.avoided_air_pollution_cost_won?.toLocaleString()}원`],
       ],
-      source: "국토부 투자평가지침 원단위 — 코드 계산",
+      source: "국토교통부 교통시설 투자평가지침 기준",
     });
   if (c2 && !c2.stub)
     cards.push({
-      title: "사회 편익",
+      title: "교통사고·도로혼잡 절감",
       rows: [
-        ["사고 절감", `${c2.avoided_accident_cost_won?.toLocaleString()}원`],
-        ["혼잡 절감", `${c2.avoided_congestion_cost_won?.toLocaleString()}원`],
+        ["사고 감소 효과", `${c2.avoided_accident_cost_won?.toLocaleString()}원`],
+        ["혼잡 감소 효과", `${c2.avoided_congestion_cost_won?.toLocaleString()}원`],
       ],
-      source: "국토부 투자평가지침 원단위 — 코드 계산",
+      source: "국토교통부 교통시설 투자평가지침 기준",
     });
   const pending = [c1, c2].find((x) => x?.stub);
   if (pending)
     cards.push({
-      title: "편익 — 산출 대기",
-      rows: [["막고 있는 것", pending.need ?? "원단위 확정 전"]],
-      source: (c1?.formula as string) ?? "원단위가 들어오면 이 카드에 금액이 찍힙니다",
+      title: "탄소·사고·혼잡 절감액",
+      rows: [["산출 상태", "국토교통부 공식 기준값을 적용한 뒤 금액으로 알려드립니다"]],
+      source: "근거 없는 금액은 제시하지 않습니다",
       muted: true,
     });
   return cards;
@@ -222,26 +222,33 @@ export default function Home() {
 
   const kpis: { label: string; value: string; note: string; warn?: boolean }[] = summary
     ? [
-        // 발표 헤드라인과 같은 값을 쓴다 — 화면이 63.5%, 발표가 84.7%면 어느 쪽이 맞냐는
-        // 질문부터 받는다. 복화 7%는 편방향 물량 대비이지 전체 대비가 아니다.
         {
-          label: "편방향 구간",
-          value: backhaul ? `${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%` : "—",
-          note: backhaul
-            ? `${backhaul.pairs}쌍 중 ${backhaul.oneWay}쌍 · 편방향 물량의 ${backhaul.backhaulPct}%만 복화 가능`
-            : "집계 중",
+          label: "돌아올 때 빈 차로 오는 구간",
+          value: `${summary.od.dominant_dir_ton_pct}%`,
+          note: "화물이 한쪽으로만 흐르는 구간의 비율",
           warn: true,
         },
-        // "연간"이 아니다. API 데이터 창은 2025-08-12~12-31 · 139일이다(IDEA.md:114).
-        { label: "2025 하반기 물량", value: `${(summary.od.total_ton / 10000).toFixed(0)}만 톤`, note: `8~12월 139일 · O-D ${summary.od.pairs_undirected}쌍` },
-        { label: "X-factor", value: `${summary.x_factor}`, note: `정차가 표정시간의 ${summary.dwell_share_pct}%` },
-        { label: "화물취급 정차", value: `${Math.round(summary.dwell_min_by_reason["화물취급"] ?? 0).toLocaleString()}분`, note: "중간역 합계 · 정차 사유 1위" },
+        {
+          label: "철도로 옮긴 화물",
+          value: `${(summary.od.total_ton / 10000).toFixed(0)}만 톤`,
+          note: `2025년 8~12월 · 전국 ${summary.od.pairs_undirected}개 구간`,
+        },
+        {
+          label: "실제 걸리는 시간",
+          value: `${summary.x_factor}배`,
+          note: `쉬지 않고 달릴 때의 ${summary.x_factor}배 — 중간 정차 때문`,
+        },
+        {
+          label: "역에 서 있는 시간",
+          value: `${Math.round(summary.dwell_min_by_reason["화물취급"] ?? 0).toLocaleString()}분`,
+          note: "화물 싣고 내리느라 멈춘 시간이 가장 길다",
+        },
       ]
     : [];
 
   const NAV: [View, string, string][] = [
-    ["map", "흐름 지도", "M3 12h18M12 3v18"],
-    ["log", "함수 호출 로그", "M4 6h16M4 12h10M4 18h13"],
+    ["map", "전국 물동량", "M3 12h18M12 3v18"],
+    ["log", "계산 근거", "M4 6h16M4 12h10M4 18h13"],
     ["source", "데이터 출처", "M4 5h16v14H4z"],
   ];
 
@@ -306,7 +313,7 @@ export default function Home() {
               <h1 className="text-2xl font-bold tracking-tight">전환 편익 상담.</h1>
               <p className="mt-0.5 text-sm text-[#112d4e]/60">
                 {summary
-                  ? `열차 ${summary.source.trains}편 · 수송통계 ${summary.source.od_records.toLocaleString()}건 · O-D ${summary.od.pairs_undirected}쌍 분석`
+                  ? `화물열차 ${summary.source.trains}편과 2025년 실제 운송실적 ${summary.source.od_records.toLocaleString()}건을 근거로 답합니다`
                   : "데이터 불러오는 중…"}
               </p>
             </div>
@@ -348,13 +355,13 @@ export default function Home() {
             <section className="flex min-h-0 flex-col rounded-xl border border-[#dbe2ef] bg-white">
               <div className="flex items-baseline justify-between border-b border-[#dbe2ef] px-4 py-3">
                 <h2 className="text-sm font-semibold">화주 상담</h2>
-                <p className="text-[11px] text-[#112d4e]/45">질문 → 함수 호출 → 근거와 함께 답변</p>
+                <p className="text-[11px] text-[#112d4e]/45">모든 숫자는 실제 운송 실적에서 계산합니다</p>
               </div>
 
               <div ref={scrollRef} className="max-h-[46vh] min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4">
                 {msgs.length === 0 && (
                   <div className="space-y-2">
-                    <p className="text-[11px] text-[#112d4e]/45">아래 질문을 눌러 시작하세요</p>
+                    <p className="text-[11px] text-[#112d4e]/45">평소 쓰시는 말로 물어보세요. 아래를 눌러도 됩니다.</p>
                     {EXAMPLES.map((e) => (
                       <button
                         key={e}
@@ -467,7 +474,7 @@ export default function Home() {
             <section className="flex min-h-0 flex-col rounded-xl border border-[#dbe2ef] bg-white">
               <div className="flex items-baseline justify-between border-b border-[#dbe2ef] px-4 py-3">
                 <h2 className="text-sm font-semibold">
-                  {view === "map" ? "전국 화물 흐름" : view === "log" ? "함수 호출 로그" : "데이터 출처"}
+                  {view === "map" ? "전국 화물 물동량" : view === "log" ? "이 답은 어떻게 나왔나" : "무엇을 근거로 답하나"}
                 </h2>
                 <p className="text-[11px] text-[#112d4e]/45">
                   {view === "map"
@@ -475,7 +482,7 @@ export default function Home() {
                       ? `${active.from} → ${active.to} 강조 중`
                       : "선을 클릭하면 그 구간을 질문합니다"
                     : view === "log"
-                      ? `${allTrace.length}회 호출됨`
+                      ? `계산 ${allTrace.length}단계`
                       : "원본은 재배포하지 않습니다"}
                 </p>
               </div>

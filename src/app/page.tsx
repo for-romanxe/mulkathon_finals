@@ -236,7 +236,7 @@ export default function Home() {
     b3?.found && route
       ? [
           {
-            label: `${route.from} → ${route.to} 연간 운송량`,
+            label: `${route.from} → ${route.to} 운송량`,
             value: `${Math.round((b3.ton ?? 0) / 10000).toLocaleString()}만 톤`,
             note: "2025년 하반기 실제 실적",
           },

@@ -2,7 +2,7 @@
 // 전국 화물 흐름 개략도. 남한 해안선 개형 위에 O-D를 얹는다.
 // 선 굵기 = 물량, 선 색 = 역방향 물량 비중(돌아오는 화물이 없을수록 붉다).
 // 질문한 구간은 강조되고, 선을 클릭하면 그 구간을 묻는다.
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { STATION_GEO, VIEW_W, VIEW_H, project } from "./map-data";
 import { KOREA_PROVINCES } from "./korea-geo";
 
@@ -17,6 +17,13 @@ function flowColor(revShare: number) {
   return "#3f72af";
 }
 
+const LEGEND: [string, string][] = [
+  ["#c2410c", "거의 편도"],
+  ["#e08b2c", "돌아올 화물 적음"],
+  ["#7ba3d0", "일부 복화"],
+  ["#3f72af", "양방향"],
+];
+
 // 겹치는 구간이 서로 가려지지 않게 살짝 휘어 그린다.
 function arc(x1: number, y1: number, x2: number, y2: number) {
   const mx = (x1 + x2) / 2;
@@ -29,7 +36,7 @@ function arc(x1: number, y1: number, x2: number, y2: number) {
 }
 
 // 시도 경계 → SVG path. 생성 파일의 [lon, lat, ...] 평탄 배열을 그대로 투영한다.
-const LAND = KOREA_PROVINCES.map((prov) =>
+const LAND = KOREA_PROVINCES.filter((p) => !p.name.startsWith("제주")).map((prov) =>
   prov.rings
     .map((ring) => {
       let d = "";
@@ -80,6 +87,49 @@ export default function FlowMap({
   const hasActive = !!active && pairs.some(isActive);
   const stations = [...new Set(pairs.flatMap((p) => [p.a, p.b]))];
 
+  // 확대·이동 — 지도와 선만 변형되고 범례·버튼은 화면에 고정된다.
+  const [tf, setTf] = useState({ k: 1, x: 0, y: 0 });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ px: number; py: number } | null>(null);
+
+  function toViewBox(e: { clientX: number; clientY: number }) {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r) return { x: VIEW_W / 2, y: VIEW_H / 2 };
+    // viewBox 는 종횡비를 유지하며 가운데 맞춤되므로 실제 그려진 영역을 되짚는다
+    const scale = Math.min(r.width / VIEW_W, r.height / VIEW_H);
+    return {
+      x: (e.clientX - r.left - (r.width - VIEW_W * scale) / 2) / scale,
+      y: (e.clientY - r.top - (r.height - VIEW_H * scale) / 2) / scale,
+    };
+  }
+
+  function onWheel(e: React.WheelEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const p = toViewBox(e);
+    setTf((t) => {
+      const k = Math.min(6, Math.max(1, t.k * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+      // 커서 아래 지점이 제자리에 머물도록 이동량을 보정한다
+      return { k, x: p.x - ((p.x - t.x) / t.k) * k, y: p.y - ((p.y - t.y) / t.k) * k };
+    });
+  }
+
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    drag.current = { px: e.clientX, py: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!drag.current) return;
+    const r = svgRef.current?.getBoundingClientRect();
+    const scale = r ? Math.min(r.width / VIEW_W, r.height / VIEW_H) : 1;
+    const dx = (e.clientX - drag.current.px) / scale;
+    const dy = (e.clientY - drag.current.py) / scale;
+    drag.current = { px: e.clientX, py: e.clientY };
+    setTf((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
+  }
+  function endDrag() {
+    drag.current = null;
+  }
+
   const placed: [number, number][] = [];
   const canLabel = (x: number, y: number) => {
     if (placed.some(([px, py]) => Math.abs(px - x) < 36 && Math.abs(py - y) < 12)) return false;
@@ -88,7 +138,43 @@ export default function FlowMap({
   };
 
   return (
-    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="h-full w-full" role="img" aria-label="전국 화물 흐름 개략도">
+    <div className="relative h-full w-full overflow-hidden">
+      {/* 범례는 화면에 고정 — 지도를 확대·이동해도 따라 움직이지 않는다 */}
+      <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-lg bg-white/85 px-2.5 py-2 backdrop-blur-sm">
+        <p className="text-[10px] font-semibold text-[#3f72af]">선 색 = 돌아오는 화물이 있는가</p>
+        <ul className="mt-1 space-y-0.5">
+          {LEGEND.map(([c, label]) => (
+            <li key={label} className="flex items-center gap-1.5 text-[10px] text-[#112d4e]/60">
+              <span className="h-[3px] w-3.5 rounded-full" style={{ background: c }} />
+              {label}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="pointer-events-none absolute right-2 top-2 z-10 flex flex-col items-end gap-1">
+        <button
+          onClick={() => setTf({ k: 1, x: 0, y: 0 })}
+          className="pointer-events-auto rounded-md border border-[#dbe2ef] bg-white/90 px-2 py-1 text-[10px] font-medium text-[#112d4e]/70 hover:border-[#3f72af]"
+        >
+          처음 크기
+        </button>
+        <span className="rounded bg-white/70 px-1.5 text-[9px] text-[#112d4e]/40">휠 확대 · 끌어서 이동</span>
+      </div>
+
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        className={`h-full w-full ${drag.current ? "cursor-grabbing" : "cursor-grab"}`}
+        role="img"
+        aria-label="전국 화물 흐름 개략도"
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerLeave={endDrag}
+      >
+        <g transform={`translate(${tf.x} ${tf.y}) scale(${tf.k})`}>
       <g>
         {LAND.map((d, i) => (
           <path key={i} d={d} fill="#e9eef7" stroke="#c6d3e6" strokeWidth={0.5} strokeLinejoin="round" />
@@ -155,24 +241,8 @@ export default function FlowMap({
         );
       })}
 
-      <g transform="translate(8, 20)">
-        <text y={0} className="text-[9px]" fill="#8ea5c4">
-          선 색 = 돌아오는 화물이 있는가
-        </text>
-        {[
-          ["#c2410c", "거의 편도"],
-          ["#e08b2c", "돌아올 화물 적음"],
-          ["#7ba3d0", "일부 복화"],
-          ["#3f72af", "양방향"],
-        ].map(([c, label], i) => (
-          <g key={label} transform={`translate(0, ${12 + i * 11})`}>
-            <line x1={0} y1={-3} x2={14} y2={-3} stroke={c} strokeWidth={3} strokeLinecap="round" />
-            <text x={19} y={0} className="text-[8.5px]" fill="#8ea5c4">
-              {label}
-            </text>
-          </g>
-        ))}
-      </g>
-    </svg>
+        </g>
+      </svg>
+    </div>
   );
 }

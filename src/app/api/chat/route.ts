@@ -2,6 +2,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, runTool, gateTool } from "@/lib/orchestrator";
 import { narrateDual } from "@/lib/narrate/dual";
+import { checkScope, refusalText } from "@/lib/narrate/scope";
 
 const SYSTEM = `너는 코레일 영업 담당자가 화주 미팅에서 쓰는 철도 전환 편익 오케스트레이터다.
 규칙:
@@ -14,6 +15,13 @@ type Trace = { tool: string; input: unknown; output: unknown };
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
+
+  // D4(#46): 구조적 범위 밖 질문은 도구를 부르기 전에 끊는다. LLM에 맡기면 추정이 새어 나온다.
+  const asked = [...messages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? "";
+  const outOfScope = checkScope(String(asked));
+  if (outOfScope)
+    return Response.json({ text: refusalText(outOfScope), trace: [], outOfScope: outOfScope.category });
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey)
     return Response.json(

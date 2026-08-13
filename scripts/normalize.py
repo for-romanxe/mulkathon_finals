@@ -61,18 +61,27 @@ def load_runcounts():
 
 def load_od():
     recs = json.load(open(RAW / "freight_train.json", encoding="utf-8"))
-    agg = defaultdict(lambda: {"ton": 0.0, "tkm": 0.0, "container_ton": 0.0})
+    # items: 품목대분류별 톤. B5(편방향 구간의 도착역에서 "같은 품목"이 나가는지)는
+    # 쌍 합계만으로 판정할 수 없어서 품목을 집계에 남긴다. 기존 필드는 그대로 둔다.
+    # 물량 0인 품목은 빼고 넣는다 — 원본 10,245건 중 995건이 ton·tonkm 둘 다 0이라
+    # 그대로 두면 "그 품목이 나간다"로 오탐된다.
+    agg = defaultdict(lambda: {"ton": 0.0, "tkm": 0.0, "container_ton": 0.0,
+                               "items": defaultdict(float)})
     for r in recs:
         k = (norm(r["sndng_stn_nm"]), norm(r["arvl_stn_nm"]))
-        agg[k]["ton"] += float(r["ftsd_ton"])
+        ton = float(r["ftsd_ton"])
+        agg[k]["ton"] += ton
         agg[k]["tkm"] += float(r["ftsp_dtkm"])
+        agg[k]["items"][r["item_lclsf_nm"]] += ton
         if r["item_lclsf_nm"] == "컨테이너":
-            agg[k]["container_ton"] += float(r["ftsd_ton"])
+            agg[k]["container_ton"] += ton
     od = []
     for (a, b), v in sorted(agg.items()):
         od.append({"from": a, "to": b, "ton": round(v["ton"], 1), "tkm": round(v["tkm"], 1),
                    "km": round(v["tkm"] / v["ton"], 1) if v["ton"] else None,
-                   "container_ton": round(v["container_ton"], 1)})
+                   "container_ton": round(v["container_ton"], 1),
+                   "items": {i: round(t, 1) for i, t in
+                             sorted(v["items"].items(), key=lambda x: -x[1]) if t}})
     return od, len(recs), recs[0]["crtr_ymd"] if recs else None
 
 

@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { lookupOd, type OdRow } from "./calc/od";
 import { classifyDirectional } from "./calc/directional";
+import { summarizeBackhaul, backhaulFor } from "./calc/backhaul";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
 import { calculateSocialBenefit } from "./calc/social-benefit";
@@ -112,6 +113,42 @@ export async function b4Directional(input: { from: string; to: string }) {
     one_way: rev === 0,
     // 역방향 운행이 통계에 잡히는가. one_way와 갈리면 "물량은 0인데 화차는 돈다"는 뜻이다.
     reverse_route_exists: !cls.one_way,
+  };
+}
+
+// B5(#33) — 복화 가능성. v2의 핵심 발견이 나오는 자리다.
+// 편방향이라고 다 채울 수 있는 게 아니다 — 도착역이 같은 품목을 내보내야 성립한다.
+export async function b5Backhaul(input: { from?: string; to?: string }) {
+  const od = await loadOd();
+  if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+
+  // 구간 지정이 없으면 전 노선 집계 — 발표 헤드라인(7%)이 이쪽이다.
+  if (!input.from || !input.to) {
+    const s = summarizeBackhaul(od);
+    return {
+      found: true,
+      scope: "전 노선",
+      one_way_pairs: s.one_way_pairs,
+      one_way_ton: s.one_way_ton,
+      backhaul_possible_pairs: s.matched_pairs,
+      backhaul_possible_ton: s.matched_ton,
+      backhaul_possible_pct: s.matched_ton_pct,
+      top_candidates: s.candidates.slice(0, 5),
+      note: "편방향 물량 중 도착역이 같은 품목을 내보내는 비중. 나머지는 구조적 편방향이라 복화로 못 채운다.",
+    };
+  }
+
+  const r = backhaulFor(od, { from: input.from, to: input.to });
+  if (!r)
+    return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+  return {
+    found: true,
+    scope: `${input.from}→${input.to}`,
+    backhaul_possible: r.matched.length > 0,
+    matched_items: r.matched,
+    note: r.matched.length
+      ? "도착역이 같은 품목을 내보내고 있어 복화 여지가 있다"
+      : "도착역이 같은 품목을 내보내지 않는다 — 구조적 편방향이라 복화로 채울 수 없다",
   };
 }
 
@@ -228,6 +265,21 @@ export const TOOLS = [
     },
   },
   {
+    name: "b5_backhaul",
+    description:
+      "복화(왕복 적재) 가능성을 판정한다. 편방향 구간의 도착역이 같은 품목을 내보내고 있어야 복화가 성립한다. " +
+      "from·to를 주면 그 구간을, 생략하면 전 노선 집계(편방향 물량 중 복화 가능 비중)를 준다. " +
+      "복화·빈 화차·왕복을 물었을 때 호출한다. 편방향 판정 자체는 b4_directional이 정본이다.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        from: { type: "string", description: "출발역명. 생략하면 전 노선 집계" },
+        to: { type: "string", description: "도착역명. 생략하면 전 노선 집계" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "b1_dwell_breakdown",
     description:
       "화물열차가 역에서 머무는 시간을 정차사유별로 집계한다(화물취급·승무원교대·동력차교체·대피·교행 등, 분 단위). " +
@@ -314,6 +366,8 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return b1DwellBreakdown();
     case "b2_x_factor":
       return b2XFactor();
+    case "b5_backhaul":
+      return b5Backhaul(input as { from?: string; to?: string });
     default:
       return { error: `알 수 없는 도구: ${name}` };
   }

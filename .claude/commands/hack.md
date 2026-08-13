@@ -20,25 +20,33 @@ argument-hint: "[내 GitHub 아이디 (생략 시 gh 계정에서 자동)]"
 ```bash
 git fetch --prune
 gh pr list --state open --json number,title,author,headRefName,reviewDecision,mergeable,additions,deletions,statusCheckRollup,updatedAt
-gh issue list --assignee @me --state open --json number,title,labels
+gh issue list --assignee @me --state open --json number,title,labels,updatedAt
 ```
 
 gh가 인증 안 됐거나 리모트가 없으면 → 거기서 멈추고 "셋업 필요: gh auth login / 리모트 등록"만 보고하고 끝낸다. 혼자 고치려 들지 마라.
 
 ## 우선순위 사다리 — 위에서부터 처음 걸리는 하나만
 
-### 1. 내 PR에 새 리뷰가 달렸다
+### 1. 내 PR·이슈에 새 반응이 달렸다
 
-대상: 내가 author인 열린 PR 중 `reviewDecision == CHANGES_REQUESTED`, 또는 내 마지막 커밋 이후에 리뷰 코멘트가 달린 것.
+대상 — 아래 셋 중 가장 오래된 것 하나 (리뷰만이 아니라 **일반 코멘트도** 반응이다):
+
+1. 내가 author인 열린 PR 중 `reviewDecision == CHANGES_REQUESTED`
+2. 내가 author인 열린 PR 중 **내 마지막 활동(커밋·코멘트) 이후** 새 리뷰·일반 코멘트가 달린 것
+3. 나에게 assign된 열린 이슈 중 내 마지막 활동 이후 **다른 사람** 코멘트가 달린 것 — 내가 이슈에 남긴 질문의 답이 여기로 온다. 안 읽으면 그 결정은 영영 반영 안 된다
+
+(0단계의 `updatedAt`이 내 마지막 활동 시각보다 최신이면 후보다 — `gh pr view <n> --json comments,reviews,commits` / `gh issue view <n> --json comments` 로 실제 새 코멘트인지 확인한다.)
 
 ```bash
 gh pr view <n> --json reviews,comments,commits
-gh pr checkout <n>
+gh issue view <n> --json comments
+gh pr checkout <n>   # 코드를 고쳐야 할 때만
 ```
 
 - 지적이 타당하면 → 고치고 커밋·푸시 → `gh pr comment <n> --body "반영했습니다: <무엇을>"`
 - 지적이 틀렸다고 판단되면 코드를 고치지 마라. 근거를 들어 반박 코멘트만 남긴다. 리뷰어가 틀릴 수도 있다.
 - 지적이 이슈 범위 밖이면 → "이건 #<이슈번호> 밖이라 별도로 다루자" 코멘트.
+- 정보 제공 코멘트(합의·데이터·정의)면 → 반영하고 "반영했습니다" 답글. 반영 못 하면 이유를 답글로. **읽고 아무 반응도 안 남기는 것 금지** — 남긴 사람은 루프가 읽었는지 알 수 없다.
 
 ### 2. 내 PR이 머지 조건을 전부 충족했다
 

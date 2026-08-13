@@ -11,6 +11,13 @@
 
 ⚠️ `https://rail-console.vercel.app` 는 **다른 프로젝트**다. 도메인이 비슷하지만 A1 플레이스홀더를 서빙 중이므로 제출에 쓰지 않는다.
 
+**탭 제목으로는 두 주소를 구분할 수 없다** — 둘 다 `Create Next App` 이다(#70). 첫 화면 문구로 구분한다.
+
+| | 첫 화면 |
+|---|---|
+| 제출 링크 (맞는 것) | 철도 전환 편익 오케스트레이터 |
+| 다른 프로젝트 | 철도화물 진단 콘솔 |
+
 ## 2. 소스 코드
 
 <https://github.com/for-romanxe/mulkathon_finals>
@@ -33,7 +40,9 @@
 ```
 
 화면에서 짚을 것:
-- 함수 호출 배지 `b3_od_lookup → b4_directional → c1_env_benefit → c2_social_benefit` (4/4)
+- 함수 호출 배지 4/4 — **순서는 #73 머지 여부로 갈린다**
+  - #73 머지 후: `b3_od_lookup → c1_env_benefit → c2_social_benefit → b4_directional` (#39 완료 조건이 요구하는 순서)
+  - 미머지: `b3_od_lookup → b4_directional → c1_env_benefit → c2_social_benefit`
 - 답변 속 수치가 전부 배지의 도구 반환값과 같다는 것 — 37.7만톤 · 1억5,399만 톤km · 408.1km · 역방향 24.8만톤(39.7%)
 - 근거 카드 — 어느 데이터에서 나온 숫자인지
 
@@ -53,6 +62,8 @@
 
 - [ ] `.env` 에 `ANTHROPIC_API_KEY` 가 있는지 — 없으면 `/api/chat` 이 500을 낸다
 - [ ] 배포본이 최신 main인지 (Vercel 대시보드 최근 배포 시각)
+- [ ] 주소가 맞는지 — 탭 제목 말고 **첫 화면 문구**로 확인 (위 표)
+- [ ] 함수 호출 배지 순서 — #73 머지 후면 `b3 → c1 → c2 → b4`
 - [ ] 브라우저 탭 제목 — **#70 미해결이면 `Create Next App` 으로 찍힌다**
 - [ ] 근거 카드 — **#72 미해결이면 `O-D undefined건` 으로 찍힌다**
 

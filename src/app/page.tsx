@@ -324,9 +324,12 @@ export default function Home() {
               <p className="text-sm">
                 <strong>돌아오는 화물이 없습니다.</strong>{" "}
                 <span className="text-[#112d4e]/70">
-                  물량의 {summary.od.dominant_dir_ton_pct}%가 각 구간의 우세 방향으로 쏠려 있고, 양방향으로 물량이
-                  오가는 구간은 {summary.od.bidirectional_pair_pct}%뿐입니다. 편익 계산에는 이 회송 부담이 반영돼야
-                  합니다.
+                  {/* KPI 카드와 같은 계산값을 쓴다. summary.json의 dominant_dir_ton_pct(84.7)는
+                      톤 기준이라 발표 헤드라인(63.5%, 쌍 기준)과 다르고, bidirectional_pair_pct는
+                      #69 이후 재생성되지 않은 값이다(#100). 한 화면에 두 숫자가 뜨면 안 된다. */}
+                  {backhaul
+                    ? `${backhaul.pairs}쌍 중 ${backhaul.oneWay}쌍(${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%)이 편방향이고, 그중 복화로 채울 수 있는 물량은 ${backhaul.backhaulPct}%뿐입니다. 편익 계산에는 이 회송 부담이 반영돼야 합니다.`
+                    : "편방향 집계를 불러오는 중입니다."}
                 </span>
               </p>
             </div>

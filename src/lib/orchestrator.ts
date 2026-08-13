@@ -2,10 +2,9 @@
 // C1·C2 내부는 원단위 확정(#35·#37) 전까지 스텁 — 시그니처는 여기 것이 정본.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { lookupOd, type OdRow } from "./calc/od";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
-type OdRow = { from: string; to: string; ton: number; tkm: number; km: number | null; container_ton: number };
-
 let odCache: OdRow[] | null = null;
 async function loadOd(): Promise<OdRow[] | null> {
   if (odCache) return odCache;
@@ -21,19 +20,19 @@ async function loadOd(): Promise<OdRow[] | null> {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
 // B3(#29) — OD 물량·톤킬로 조회
-export async function b3OdLookup(input: { from: string; to: string }) {
+export async function b3OdLookup(input: { from: string; to: string; item?: string }) {
   const od = await loadOd();
   if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
-  const row = od.find((r) => r.from === input.from && r.to === input.to);
-  if (!row || !row.ton)
+  const result = lookupOd(od, input);
+  if (!result)
     return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
-  return {
-    found: true,
-    ton: r1(row.ton),
-    tonkm: r1(row.tkm),
-    km: row.km,
-    container_ton: r1(row.container_ton),
-  };
+  if (input.item && !result.ton)
+    return {
+      found: false,
+      ...result,
+      note: `${input.from}→${input.to} 구간에 ${input.item} 품목은 없음`,
+    };
+  return { found: true, ...result };
 }
 
 // B4(#31) — 편방향 판정: 정방향 vs 역방향 톤 비교
@@ -70,6 +69,10 @@ export const TOOLS = [
       properties: {
         from: { type: "string", description: "출발역명 (예: 구미)" },
         to: { type: "string", description: "도착역명 (예: 부산진)" },
+        item: {
+          type: "string",
+          description: "품목 대분류. 다음 9종 중 하나만: 컨테이너·시멘트·철강·사업용·일반기타·광석·석탄·유류·건설. 생략하면 전체 합계",
+        },
       },
       required: ["from", "to"],
     },
@@ -144,7 +147,7 @@ export function gateTool(
 export async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "b3_od_lookup":
-      return b3OdLookup(input as { from: string; to: string });
+      return b3OdLookup(input as { from: string; to: string; item?: string });
     case "b4_directional":
       return b4Directional(input as { from: string; to: string });
     case "c1_env_benefit":

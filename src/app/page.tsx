@@ -3,6 +3,8 @@
 // 화면 골격: 왼쪽 내비 / 지표 카드 / 대화 + 우측 패널(지도·함수 로그·데이터 출처).
 import { useEffect, useMemo, useRef, useState } from "react";
 import FlowMap, { type Flow } from "./FlowMap";
+import { summarizeBackhaul } from "@/lib/calc/backhaul";
+import type { OdRow } from "@/lib/calc/od";
 
 type Trace = { tool: string; input: unknown; output: unknown };
 type Msg = { role: "user" | "assistant"; text: string; trace?: Trace[]; isError?: boolean };
@@ -154,13 +156,20 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [flows, setFlows] = useState<Flow[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [backhaul, setBackhaul] = useState<{ pairs: number; oneWay: number; backhaulPct: number } | null>(null);
   const [view, setView] = useState<View>("map");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/data/od_stats.json")
       .then((r) => r.json())
-      .then((d: Flow[]) => setFlows(d.filter((f) => f.ton > 20000)))
+      // 지도는 굵은 선만 그리지만, 편방향·복화 지표는 392쌍 전체로 집계한다.
+      // B5 도구와 같은 함수를 쓰므로 화면과 답변이 같은 수를 말한다.
+      .then((d: OdRow[]) => {
+        setFlows((d as Flow[]).filter((f) => f.ton > 20000));
+        const s = summarizeBackhaul(d);
+        setBackhaul({ pairs: d.length, oneWay: s.one_way_pairs, backhaulPct: s.matched_ton_pct });
+      })
       .catch(() => {});
     fetch("/data/summary.json")
       .then((r) => r.json())
@@ -210,13 +219,18 @@ export default function Home() {
 
   const kpis: { label: string; value: string; note: string; warn?: boolean }[] = summary
     ? [
+        // 발표 헤드라인과 같은 값을 쓴다 — 화면이 63.5%, 발표가 84.7%면 어느 쪽이 맞냐는
+        // 질문부터 받는다. 복화 7%는 편방향 물량 대비이지 전체 대비가 아니다.
         {
-          label: "편방향 물량",
-          value: `${summary.od.dominant_dir_ton_pct}%`,
-          note: `양방향 흐름은 ${summary.od.bidirectional_pair_pct}% 구간뿐`,
+          label: "편방향 구간",
+          value: backhaul ? `${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%` : "—",
+          note: backhaul
+            ? `${backhaul.pairs}쌍 중 ${backhaul.oneWay}쌍 · 편방향 물량의 ${backhaul.backhaulPct}%만 복화 가능`
+            : "집계 중",
           warn: true,
         },
-        { label: "연간 철도화물", value: `${(summary.od.total_ton / 10000).toFixed(0)}만 톤`, note: `O-D ${summary.od.pairs_undirected}쌍` },
+        // "연간"이 아니다. API 데이터 창은 2025-08-12~12-31 · 139일이다(IDEA.md:114).
+        { label: "2025 하반기 물량", value: `${(summary.od.total_ton / 10000).toFixed(0)}만 톤`, note: `8~12월 139일 · O-D ${summary.od.pairs_undirected}쌍` },
         { label: "X-factor", value: `${summary.x_factor}`, note: `정차가 표정시간의 ${summary.dwell_share_pct}%` },
         { label: "화물취급 정차", value: `${Math.round(summary.dwell_min_by_reason["화물취급"] ?? 0).toLocaleString()}분`, note: "중간역 합계 · 정차 사유 1위" },
       ]
@@ -307,8 +321,9 @@ export default function Home() {
               <p className="text-sm">
                 <strong>돌아오는 화물이 없습니다.</strong>{" "}
                 <span className="text-[#112d4e]/70">
-                  물량의 {summary.od.dominant_dir_ton_pct}%가 한 방향으로만 흐르고, 양방향 흐름이 있는 구간은{" "}
-                  {summary.od.bidirectional_pair_pct}%뿐입니다. 편익 계산에는 이 회송 부담이 반영돼야 합니다.
+                  물량의 {summary.od.dominant_dir_ton_pct}%가 각 구간의 우세 방향으로 쏠려 있고, 양방향으로 물량이
+                  오가는 구간은 {summary.od.bidirectional_pair_pct}%뿐입니다. 편익 계산에는 이 회송 부담이 반영돼야
+                  합니다.
                 </span>
               </p>
             </div>

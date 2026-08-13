@@ -213,11 +213,9 @@ export function c2SocialBenefit(input: { tonkm: number; ton: number; km: number 
   let s: ReturnType<typeof calculateSocialBenefit>;
   try {
     s = calculateSocialBenefit({
-      railTon: input.ton,
-      distanceKm: input.km,
-      truckPayloadTon: u.truckPayloadTon as number,
-      accidentCostPerVehicleKm: u.accidentCostPerVehicleKm as number,
-      congestionCostPerVehicleKm: u.congestionCostPerVehicleKm as number,
+      tonkm: input.tonkm,
+      roadCostPerTonKm: u.roadCostPerTonKm as number,
+      railCostPerTonKm: u.railCostPerTonKm as number,
       unitCostSource: u.source as string,
     });
   } catch (err) {
@@ -231,10 +229,8 @@ export function c2SocialBenefit(input: { tonkm: number; ton: number; km: number 
   }
   return {
     stub: false,
-    truck_trips: Math.round(s.truckTrips),
-    avoided_truck_vehicle_km: r1(s.avoidedTruckVehicleKm),
-    avoided_accident_cost_won: Math.round(s.avoidedAccidentCost),
-    avoided_congestion_cost_won: Math.round(s.avoidedCongestionCost),
+    road_social_environmental_cost_won: Math.round(s.roadSocialCost),
+    rail_social_environmental_cost_won: Math.round(s.railSocialCost),
     total_social_benefit_won: Math.round(s.totalSocialBenefit),
     basis: s.basis,
   };

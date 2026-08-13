@@ -6,30 +6,26 @@
 //    값이 없는 동안 앱은 금액을 말하지 않고 무엇이 없는지 말한다.
 
 export type SocialUnitCosts = {
-  /** 화물차 1대 평균 적재량 (톤/대) */
-  truckPayloadTon: number | null;
-  /** 도로 교통사고비용 원단위 (원/대·km) */
-  accidentCostPerVehicleKm: number | null;
-  /** 도로 혼잡비용 원단위 (원/대·km) */
-  congestionCostPerVehicleKm: number | null;
-  /** 고시 번호·표 번호까지 적는다. 출처 없는 값은 값이 아니다. */
+  /** 도로 사회·환경비용 통합 원단위 (원/톤·km) */
+  roadCostPerTonKm: number | null;
+  /** 철도 사회·환경비용 통합 원단위 (원/톤·km) */
+  railCostPerTonKm: number | null;
+  /** 문서명·발행처·연도·슬라이드 번호까지 적는다. */
   source: string | null;
 };
 
 export const SOCIAL_UNIT_COSTS: SocialUnitCosts = {
-  truckPayloadTon: null,
-  accidentCostPerVehicleKm: null,
-  congestionCostPerVehicleKm: null,
-  source: null,
+  roadCostPerTonKm: 110.78,
+  railCostPerTonKm: 38.03,
+  source: "「2024년도 전환교통지원사업 협약사업자 공모 설명자료」, 한국철도물류협회(국토교통부 위탁), 2024, 슬라이드 10·19·22 (2009년 추정 이후 갱신 이력 없음)",
 };
 
 /** 아직 채워지지 않은 항목 이름. 비어 있으면 계산 가능하다. */
 export function missingUnitCosts(u: SocialUnitCosts = SOCIAL_UNIT_COSTS): string[] {
   const missing: string[] = [];
-  if (u.truckPayloadTon === null) missing.push("화물차 평균 적재량(톤/대)");
-  if (u.accidentCostPerVehicleKm === null) missing.push("교통사고비용 원단위(원/대·km)");
-  if (u.congestionCostPerVehicleKm === null) missing.push("도로혼잡비용 원단위(원/대·km)");
-  if (!u.source) missing.push("원단위 출처(고시 번호·표 번호)");
+  if (u.roadCostPerTonKm === null) missing.push("도로 사회·환경비용 원단위(원/톤·km)");
+  if (u.railCostPerTonKm === null) missing.push("철도 사회·환경비용 원단위(원/톤·km)");
+  if (!u.source) missing.push("원단위 출처(문서명·발행처·연도·슬라이드 번호)");
   return missing;
 }
 

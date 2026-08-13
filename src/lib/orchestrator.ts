@@ -3,6 +3,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { lookupOd, type OdRow } from "./calc/od";
+import { classifyDirectional } from "./calc/directional";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
 import { calculateSocialBenefit } from "./calc/social-benefit";
@@ -79,20 +80,38 @@ export async function b3OdLookup(input: { from: string; to: string; item?: strin
   return { found: true, ...result };
 }
 
-// B4(#31) — 편방향 판정: 정방향 vs 역방향 톤 비교
+// B4(#31·#90) — 편방향 판정.
+//
+// 편방향 정의가 두 개인데, **둘 다 참이고 뜻이 다르다**(#90에서 주영 결정).
+//  - `one_way` (역방향 톤 0)   → 화주에게 나가는 판정. 돌아오는 물량이 없다.
+//  - `reverse_route_exists`    → 그 방향 운행 자체는 통계에 잡힌다. 화차가 돈다.
+// 둘이 갈리는 39쌍 중 화면에 올라올 수 있는 건 4쌍(약목→오송 등)이고, 거기서
+// "돌아오는 물량은 0인데 운행은 있다"가 복화 판단의 핵심 정보다. 하나로 뭉개면 잃는다.
+//
+// 집계 헤드라인(편방향 249쌍·63.5%)은 레코드 기준으로만 재현된다 — IDEA.md에 박힌 값이다.
 export async function b4Directional(input: { from: string; to: string }) {
   const od = await loadOd();
   if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+
+  // 정방향 레코드 존재 여부는 classifyDirectional이 정본이다(#88).
+  const cls = classifyDirectional(od, input);
+  if (!cls)
+    return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+
   const ton = (a: string, b: string) => od.find((r) => r.from === a && r.to === b)?.ton ?? 0;
   const fwd = ton(input.from, input.to);
   const rev = ton(input.to, input.from);
-  if (!fwd && !rev) return { found: false, note: "양방향 모두 수송통계에 없음" };
+  if (!fwd && !rev)
+    return { found: false, note: `${input.from}→${input.to} 구간은 양방향 모두 물량 0 — 판정할 실적이 없다` };
+
   return {
     found: true,
     forward_ton: r1(fwd),
     reverse_ton: r1(rev),
     reverse_share_pct: r1((rev / (fwd + rev)) * 100),
     one_way: rev === 0,
+    // 역방향 운행이 통계에 잡히는가. one_way와 갈리면 "물량은 0인데 화차는 돈다"는 뜻이다.
+    reverse_route_exists: !cls.one_way,
   };
 }
 
@@ -195,7 +214,10 @@ export const TOOLS = [
   },
   {
     name: "b4_directional",
-    description: "구간의 편방향 여부를 판정한다(정방향·역방향 톤, 역방향 비중). 복화 가능성 언급 전 반드시 호출.",
+    description:
+      "구간의 편방향 여부를 판정한다. one_way는 역방향 물량이 0인지(화주 판정), " +
+      "reverse_route_exists는 역방향 운행이 통계에 잡히는지다. 둘이 갈리면 '돌아오는 물량은 없지만 화차는 도는' 구간이라 " +
+      "복화 여지를 다르게 말해야 한다. 복화 가능성 언급 전 반드시 호출.",
     input_schema: {
       type: "object" as const,
       properties: {

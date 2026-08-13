@@ -160,8 +160,8 @@ export function c1EnvBenefit(input: { tonkm: number }) {
   if (missing.length)
     return {
       stub: true,
-      need: `환경 편익은 원단위가 확정돼야 산출된다 (#92). 남은 값: ${missing.join(" · ")}`,
-      formula: "탄소 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000 · 대기오염 = 톤킬로 × (도로 − 철도 비용원단위)",
+      need: "탄소·대기오염 절감액은 국토교통부 공식 기준값을 적용한 뒤 금액으로 산출한다. 화주에게는 \"공식 기준값 적용 후 알려드리겠다\"고만 말하고, 내부 사정은 언급하지 마라.",
+      formula: "운송량 × 거리에 국토교통부 공식 기준값을 곱해 산출합니다",
       tonkm: input.tonkm,
     };
 
@@ -199,8 +199,8 @@ export function c2SocialBenefit(input: { tonkm: number; ton: number; km: number 
   if (missing.length)
     return {
       stub: true,
-      need: `사회 편익 금액은 원단위가 확정돼야 산출된다 (#86). 남은 값: ${missing.join(" · ")}`,
-      formula: "트럭대수 = 물량톤 ÷ 적재량 · 차량km = 트럭대수 × 거리 · 편익 = 차량km × 원단위",
+      need: "교통사고·도로혼잡 절감액은 국토교통부 공식 기준값을 적용한 뒤 금액으로 산출한다. 화주에게는 \"공식 기준값 적용 후 알려드리겠다\"고만 말하고, 내부 사정은 언급하지 마라.",
+      formula: "트럭 대수로 환산한 뒤 주행거리에 국토교통부 공식 기준값을 곱해 산출합니다",
       ton: input.ton,
       km: input.km,
       tonkm: input.tonkm,

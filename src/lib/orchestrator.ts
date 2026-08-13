@@ -8,7 +8,8 @@ import { summarizeBackhaul, backhaulFor } from "./calc/backhaul";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
 import { calculateSocialBenefit } from "./calc/social-benefit";
-import { SOCIAL_UNIT_COSTS, missingUnitCosts } from "./calc/unit-costs";
+import { SOCIAL_UNIT_COSTS, missingUnitCosts, ENV_UNIT_COSTS, missingEnvUnitCosts } from "./calc/unit-costs";
+import { calculateEnvBenefit } from "./calc/env-benefit";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
 let odCache: OdRow[] | null = null;
@@ -152,9 +153,42 @@ export async function b5Backhaul(input: { from?: string; to?: string }) {
   };
 }
 
-// C1(#35) — 원단위 확정 전 스텁. 수치를 지어내지 않는다.
+// C1(#35) — 환경 편익. C2(#37)와 같은 구조다: 계산은 calc/env-benefit.ts,
+// 원단위는 unit-costs.ts에서 주입. 값이 없으면 금액 대신 **무엇이 없는지**를 말한다.
 export function c1EnvBenefit(input: { tonkm: number }) {
-  return { stub: true, need: "탄소·대기오염 원단위(원/톤킬로) — 국토부 투자평가지침에서 확정(#35)", tonkm: input.tonkm };
+  const missing = missingEnvUnitCosts();
+  if (missing.length)
+    return {
+      stub: true,
+      need: `환경 편익은 원단위가 확정돼야 산출된다 (#92). 남은 값: ${missing.join(" · ")}`,
+      formula: "탄소 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000 · 대기오염 = 톤킬로 × (도로 − 철도 비용원단위)",
+      tonkm: input.tonkm,
+    };
+
+  const u = ENV_UNIT_COSTS;
+  try {
+    const e = calculateEnvBenefit({
+      tonkm: input.tonkm,
+      railCo2GPerTonKm: u.railCo2GPerTonKm as number,
+      roadCo2GPerTonKm: u.roadCo2GPerTonKm as number,
+      railAirCostPerTonKm: u.railAirCostPerTonKm as number,
+      roadAirCostPerTonKm: u.roadAirCostPerTonKm as number,
+      unitCostSource: u.source as string,
+    });
+    return {
+      stub: false,
+      avoided_co2_ton: r1(e.avoidedCo2Ton),
+      avoided_air_pollution_cost_won: Math.round(e.avoidedAirPollutionCost),
+      basis: e.basis,
+    };
+  } catch (err) {
+    // RangeError가 요청 전체를 500으로 만들지 않게 한다 — C2와 같은 처리(#87).
+    return {
+      stub: true,
+      need: `환경 편익을 계산할 수 없다: ${err instanceof Error ? err.message : String(err)}`,
+      tonkm: input.tonkm,
+    };
+  }
 }
 
 // C2(#37) — 승빈이 만든 calc/social-benefit.ts 를 실제로 연결한다.
@@ -226,7 +260,7 @@ export const TOOLS = [
   {
     name: "c1_env_benefit",
     description:
-      "도로 대비 철도 전환의 환경 편익(탄소·대기오염)을 톤킬로 기준으로 계산한다. " +
+      "도로 대비 철도 전환의 환경 편익을 계산한다 — 줄어드는 탄소 배출(톤)과 대기오염 비용(원). " +
       "사용자가 편익·환경 효과·탄소를 물었을 때만 호출한다. 물량·방향·복화만 묻는 질문에는 호출하지 않는다.",
     input_schema: {
       type: "object" as const,

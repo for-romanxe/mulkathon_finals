@@ -32,3 +32,39 @@ export function missingUnitCosts(u: SocialUnitCosts = SOCIAL_UNIT_COSTS): string
   if (!u.source) missing.push("원단위 출처(고시 번호·표 번호)");
   return missing;
 }
+
+// C1(#35) — 환경 편익 원단위. 같은 규칙: 지침 원문에서 확인한 값만 넣는다.
+//
+// ⚠️ IDEA.md 표현 금지 목록: 탄소 수치는 "1/26" 또는 "국토부 4%" 중 **하나만** 쓴다.
+//    여기 들어가는 건 그 서술용 수치가 아니라 계산용 원단위(g/톤·km)다 — 섞지 말 것.
+
+export type EnvUnitCosts = {
+  /** 철도 탄소 배출 원단위 (g CO2eq / 톤·km) */
+  railCo2GPerTonKm: number | null;
+  /** 도로 탄소 배출 원단위 (g CO2eq / 톤·km) */
+  roadCo2GPerTonKm: number | null;
+  /** 철도 대기오염 비용 원단위 (원 / 톤·km) */
+  railAirCostPerTonKm: number | null;
+  /** 도로 대기오염 비용 원단위 (원 / 톤·km) */
+  roadAirCostPerTonKm: number | null;
+  source: string | null;
+};
+
+export const ENV_UNIT_COSTS: EnvUnitCosts = {
+  railCo2GPerTonKm: null,
+  roadCo2GPerTonKm: null,
+  railAirCostPerTonKm: null,
+  roadAirCostPerTonKm: null,
+  source: null,
+};
+
+/** 아직 채워지지 않은 환경 원단위 항목. 비어 있으면 계산 가능하다. */
+export function missingEnvUnitCosts(u: EnvUnitCosts = ENV_UNIT_COSTS): string[] {
+  const missing: string[] = [];
+  if (u.railCo2GPerTonKm === null) missing.push("철도 탄소 원단위(g/톤·km)");
+  if (u.roadCo2GPerTonKm === null) missing.push("도로 탄소 원단위(g/톤·km)");
+  if (u.railAirCostPerTonKm === null) missing.push("철도 대기오염 비용 원단위(원/톤·km)");
+  if (u.roadAirCostPerTonKm === null) missing.push("도로 대기오염 비용 원단위(원/톤·km)");
+  if (!u.source) missing.push("원단위 출처(고시 번호·표 번호)");
+  return missing;
+}

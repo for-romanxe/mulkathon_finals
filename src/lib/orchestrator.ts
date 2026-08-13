@@ -26,6 +26,12 @@ export async function b3OdLookup(input: { from: string; to: string; item?: strin
   const result = lookupOd(od, input);
   if (!result)
     return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+  if (input.item && !result.ton)
+    return {
+      found: false,
+      ...result,
+      note: `${input.from}→${input.to} 구간에 ${input.item} 품목은 없음`,
+    };
   return { found: true, ...result };
 }
 
@@ -61,9 +67,12 @@ export const TOOLS = [
     input_schema: {
       type: "object" as const,
       properties: {
-        item: { type: "string", description: "Optional cargo item name" },
         from: { type: "string", description: "출발역명 (예: 구미)" },
         to: { type: "string", description: "도착역명 (예: 부산진)" },
+        item: {
+          type: "string",
+          description: "품목 대분류. 다음 9종 중 하나만: 컨테이너·시멘트·철강·사업용·일반기타·광석·석탄·유류·건설. 생략하면 전체 합계",
+        },
       },
       required: ["from", "to"],
     },

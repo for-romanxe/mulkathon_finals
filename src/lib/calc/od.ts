@@ -10,10 +10,11 @@ export type OdRow = {
 
 export type OdLookup = {
   ton: number;
-  tonkm: number;
+  tonkm?: number;
   km: number | null;
-  container_ton: number;
+  container_ton?: number;
   item?: string;
+  available_items?: string[];
 };
 
 const r1 = (value: number) => Math.round(value * 10) / 10;
@@ -27,13 +28,21 @@ export function lookupOd(
   if (!row) return null;
 
   const ton = input.item ? row.items[input.item] ?? 0 : row.ton;
-  if (!ton) return null;
+  if (!ton) {
+    if (!input.item) return null;
+    return {
+      ton: 0,
+      km: row.km,
+      item: input.item,
+      available_items: Object.keys(row.items),
+    };
+  }
 
   return {
     ton: r1(ton),
     tonkm: r1(input.item && row.km !== null ? ton * row.km : row.tkm),
     km: row.km,
-    container_ton: r1(input.item === undefined ? row.container_ton : 0),
+    ...(input.item === undefined ? { container_ton: r1(row.container_ton) } : {}),
     ...(input.item ? { item: input.item } : {}),
   };
 }

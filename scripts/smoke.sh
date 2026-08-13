@@ -18,9 +18,27 @@ elif [ -f requirements.txt ]; then
   python3 -m pip install -q -r requirements.txt || fail "pip install"
 fi
 
-# ── 데모 시나리오 ──
-# TODO(8/13 스택 확정 시 채움): 데모 핵심 경로 1개를 여기서 실행한다.
-# 예) curl -sf http://localhost:3000/api/health || fail "health check"
-# 예) python3 -c "import app; app.self_check()" || fail "self check"
+# ── 데모 시나리오 (A1에서 주영이 채움 — 스택: Next.js) ──
+
+# 1) 데모 진입점이 실제로 빌드 산출물에 있는가
+[ -d .next ] && { [ -f .next/BUILD_ID ] || fail "빌드 산출물 없음"; }
+
+# 2) 화면이 읽는 데이터가 실제로 있고 비어있지 않은가
+#    (층1·층2 산출물은 public/data/*.json 으로 나간다)
+for f in public/data/*.json; do
+  [ -e "$f" ] || continue
+  python3 -c "
+import json,sys
+d=json.load(open('$f',encoding='utf-8'))
+if not d: sys.exit('비어있음')
+" || fail "$f — 데이터가 비었거나 JSON이 깨짐"
+done
+
+# 3) 파이썬 파이프라인이 문법적으로 성립하는가 (깨진 채 머지되는 것 방지)
+if compgen -G "scripts/*.py" >/dev/null; then
+  for f in scripts/*.py; do
+    python3 -m py_compile "$f" || fail "$f 문법 오류"
+  done
+fi
 
 echo "SMOKE OK"

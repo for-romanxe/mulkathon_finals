@@ -46,7 +46,7 @@ function cardsFromTrace(trace: Trace[]): Card[] {
     cards.push({
       title: "물량 · 거리",
       rows: [
-        ["연간 물량", `${b3.ton?.toLocaleString()}톤`],
+        ["물량 (2025 하반기)", `${b3.ton?.toLocaleString()}톤`],
         ["톤킬로", `${b3.tonkm?.toLocaleString()}`],
         ["평균 거리", `${b3.km}km`],
       ],
@@ -311,7 +311,7 @@ export default function Home() {
               </p>
             </div>
             <div className="flex gap-2">
-              <span className="rounded-lg border border-[#dbe2ef] px-3 py-1.5 text-xs text-[#112d4e]/60">2025 수송통계 기준</span>
+              <span className="rounded-lg border border-[#dbe2ef] px-3 py-1.5 text-xs text-[#112d4e]/60">2025 하반기(8~12월) 139일 실적</span>
             </div>
           </div>
         </header>
@@ -494,7 +494,7 @@ export default function Home() {
                     )}
                   </div>
                   <p className="border-t border-[#dbe2ef] px-4 py-2.5 text-[10px] leading-relaxed text-[#112d4e]/40">
-                    2025 수송통계 O-D 중 연 2만 톤 이상 구간. 선 굵기 = 물량, 선 색 = 역방향 물량 비중. 역 위치는 지역 기준{" "}
+                    2025 하반기(139일) O-D 중 2만 톤 이상 구간. 선 굵기 = 물량, 선 색 = 역방향 물량 비중. 역 위치는 지역 기준{" "}
                     <strong>근사 좌표</strong>이며 측량값이 아닙니다.
                   </p>
                 </>

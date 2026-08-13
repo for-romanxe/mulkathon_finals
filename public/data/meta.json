@@ -1,0 +1,1 @@
+{"schedule_rows":8972,"trains":330,"od_rows":10142,"od_pairs":392,"od_from":"20250813","od_to":"20251231","od_days":138,"stations":86,"note":"시각은 초 단위. 자정 넘김은 시퀀스 복원 단계에서 처리한다."}

@@ -43,13 +43,13 @@ export const STATION_GEO: Record<string, [number, number]> = {
 // 위도 1°와 경도 1°의 실거리 차이를 반영해 형태가 찌그러지지 않게 한다.
 export const VIEW_W = 400;
 export const VIEW_H = 560;
-const LAT_TOP = 38.7;
-const LAT_BOTTOM = 33.1;
-const LON_LEFT = 125.8;
-const LON_RIGHT = 129.7;
+const LAT_TOP = 38.65;
+const LAT_BOTTOM = 34.2; // 제주는 화물 O-D가 없어 지도에서 뺀다 — 본토를 크게 본다
+const LON_LEFT = 125.95;
+const LON_RIGHT = 129.6;
 const KM_PER_LAT = 111;
 const KM_PER_LON = 91; // 북위 35° 기준
-const PAD = 14;
+const PAD = 6;
 const SCALE = Math.min(
   (VIEW_H - PAD * 2) / ((LAT_TOP - LAT_BOTTOM) * KM_PER_LAT),
   (VIEW_W - PAD * 2) / ((LON_RIGHT - LON_LEFT) * KM_PER_LON),

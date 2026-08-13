@@ -178,6 +178,7 @@ export default function Home() {
   const [backhaul, setBackhaul] = useState<{ pairs: number; oneWay: number; backhaulPct: number } | null>(null);
   const [railOpen, setRailOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -324,9 +325,16 @@ export default function Home() {
             </span>
 
             <button
+              onClick={() => setGuideOpen(true)}
+              className="ml-auto rounded-lg border border-[#e2e2e0] px-2.5 py-1 text-[12px] font-medium text-[#112d4e]/70 transition hover:border-[#3f72af] hover:text-[#3f72af]"
+            >
+              시연 안내
+            </button>
+
+            <button
               onClick={() => setPanelOpen((v) => !v)}
               aria-label="근거 패널"
-              className={`ml-auto rounded-lg border p-1.5 transition ${
+              className={`rounded-lg border p-1.5 transition ${
                 panelOpen
                   ? "border-[#3f72af] bg-[#eaf1fa] text-[#3f72af]"
                   : "border-transparent text-[#112d4e]/45 hover:bg-[#f5f5f4] hover:text-[#112d4e]"
@@ -338,6 +346,56 @@ export default function Home() {
               </svg>
             </button>
           </header>
+
+          {/* 시연 안내 — 심사·시연 때 어떤 구간이 무엇을 보여주는지. 눌러서 바로 실행한다. */}
+          {guideOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-[#112d4e]/30 p-4"
+              onClick={() => setGuideOpen(false)}
+            >
+              <div
+                className="w-full max-w-[560px] rounded-2xl bg-white p-5 shadow-[0_20px_60px_-12px_rgba(16,24,40,0.3)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-[16px] font-semibold">시연 안내</h2>
+                  <button onClick={() => setGuideOpen(false)} className="text-[13px] text-[#112d4e]/45 hover:text-[#112d4e]">
+                    닫기
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-[#112d4e]/60">
+                  2025년 하반기(139일) 실제 운송 실적이 있는 구간만 답합니다. 아래는 각 기능이 잘 보이는 구간입니다 —
+                  누르면 바로 실행됩니다.
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {([
+                    ["오봉 → 북철송장", "물량·거리 + 사회적 편익 112억 원 산출", "오봉에서 북철송장으로 옮기면 탄소랑 사회적 비용이 얼마나 줄어드나요?"],
+                    ["신광양항 → 군산항", "돌아오는 화물(복화) 여지 확인 — 역방향 14%", "신광양항에서 군산항 구간은 복화가 가능한가요?"],
+                    ["도담 → 수색", "전국 최대 물량이면서 돌아올 화물 0 — 회송 부담 경고", "도담에서 수색으로 보내면 돌아오는 화물이 있나요?"],
+                    ["삽교 → 남철송장", "돌아오는 방향을 21% 채우고 있는 구간", "삽교에서 남철송장 구간의 물량과 돌아오는 화물을 알려주세요"],
+                    ["구미 → 부산 (없는 구간)", "지어내지 않고 거절 + 실제 역(부산진·부산신항) 안내", "구미에서 부산으로 보내는 물량은요?"],
+                  ] as [string, string, string][]).map(([route, desc, q]) => (
+                    <li key={route}>
+                      <button
+                        onClick={() => {
+                          setGuideOpen(false);
+                          send(q);
+                        }}
+                        className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-[#ededec] px-3.5 py-2.5 text-left transition hover:border-[#3f72af] hover:bg-[#f9fbfd]"
+                      >
+                        <span className="shrink-0 text-[13px] font-semibold">{route}</span>
+                        <span className="text-right text-[12px] text-[#112d4e]/55">{desc}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 border-t border-[#f0f0ef] pt-2.5 text-[11px] leading-relaxed text-[#112d4e]/45">
+                  답변 아래 배지를 누르면 우측에 계산 근거(실제 함수 호출 내역)가 열립니다. 운임·예약·실시간 위치는
+                  기능 범위 밖이라 정중히 거절합니다.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex min-h-0 flex-1">
             {/* 대화 */}

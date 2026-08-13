@@ -3,17 +3,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-type OdRow = { from: string; to: string; item: string; ton: number; tonkm: number };
+// od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
+type OdRow = { from: string; to: string; ton: number; tkm: number; km: number | null; container_ton: number };
 
 let odCache: OdRow[] | null = null;
 async function loadOd(): Promise<OdRow[] | null> {
   if (odCache) return odCache;
   try {
-    const p = path.join(process.cwd(), "public", "data", "od.json");
+    const p = path.join(process.cwd(), "public", "data", "od_stats.json");
     odCache = JSON.parse(await fs.readFile(p, "utf-8")) as OdRow[];
     return odCache;
   } catch {
-    return null; // A3(#55) 머지 전이거나 파일 없음
+    return null; // 데이터 파이프라인 산출물 없음
   }
 }
 
@@ -22,25 +23,29 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 // B3(#29) — OD 물량·톤킬로 조회
 export async function b3OdLookup(input: { from: string; to: string; item?: string }) {
   const od = await loadOd();
-  if (!od) return { found: false, note: "od.json 없음 — 데이터 파이프라인(A3) 머지 전" };
-  const rows = od.filter(
-    (r) => r.from === input.from && r.to === input.to && (!input.item || r.item === input.item),
-  );
-  if (!rows.length)
+  if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+  const row = od.find((r) => r.from === input.from && r.to === input.to);
+  if (!row || !row.ton)
     return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
-  const ton = rows.reduce((s, r) => s + r.ton, 0);
-  const tonkm = rows.reduce((s, r) => s + r.tonkm, 0);
-  return { found: true, ton: r1(ton), tonkm: r1(tonkm), km: r1(tonkm / ton), records: rows.length };
+  return {
+    found: true,
+    ton: r1(row.ton),
+    tonkm: r1(row.tkm),
+    km: row.km,
+    container_ton: r1(row.container_ton),
+    ...(input.item && input.item !== "컨테이너"
+      ? { note: "품목 세분은 컨테이너 톤만 제공 — 나머지는 전체 합계 기준" }
+      : {}),
+  };
 }
 
 // B4(#31) — 편방향 판정: 정방향 vs 역방향 톤 비교
 export async function b4Directional(input: { from: string; to: string }) {
   const od = await loadOd();
-  if (!od) return { found: false, note: "od.json 없음 — 데이터 파이프라인(A3) 머지 전" };
-  const sum = (a: string, b: string) =>
-    od.filter((r) => r.from === a && r.to === b).reduce((s, r) => s + r.ton, 0);
-  const fwd = sum(input.from, input.to);
-  const rev = sum(input.to, input.from);
+  if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
+  const ton = (a: string, b: string) => od.find((r) => r.from === a && r.to === b)?.ton ?? 0;
+  const fwd = ton(input.from, input.to);
+  const rev = ton(input.to, input.from);
   if (!fwd && !rev) return { found: false, note: "양방향 모두 수송통계에 없음" };
   return {
     found: true,

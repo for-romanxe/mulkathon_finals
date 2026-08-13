@@ -224,8 +224,12 @@ export default function Home() {
     ? [
         {
           label: "돌아올 때 빈 차로 오는 구간",
-          value: `${summary.od.dominant_dir_ton_pct}%`,
-          note: "화물이 한쪽으로만 흐르는 구간의 비율",
+          // 값은 쌍 기준이어야 라벨과 맞는다. dominant_dir_ton_pct(84.7%)는 톤 기준이라
+          // "구간의 비율"이라는 설명과 다른 것을 가리키고, main의 경고 배너(63.5%)와도 갈린다.
+          value: backhaul ? `${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%` : "—",
+          note: backhaul
+            ? `${backhaul.pairs}개 구간 중 ${backhaul.oneWay}개 · 돌아올 때 실을 화물은 ${backhaul.backhaulPct}%뿐`
+            : "집계 중",
           warn: true,
         },
         {

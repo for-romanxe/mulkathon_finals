@@ -1,6 +1,7 @@
 // D1(#39): 라우팅 루프 — LLM이 도구를 고르고, 코드가 계산하고, LLM이 결과만 서술한다.
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, runTool, gateTool } from "@/lib/orchestrator";
+import { narrateDual } from "@/lib/narrate/dual";
 
 const SYSTEM = `너는 코레일 영업 담당자가 화주 미팅에서 쓰는 철도 전환 편익 오케스트레이터다.
 규칙:
@@ -38,7 +39,16 @@ export async function POST(req: Request) {
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("");
-      return Response.json({ text, trace, blocked });
+      // D3(#44): 같은 수치를 화주용·정책용 두 논지로. 도구를 한 번도 안 불렀으면 서술할 근거가 없다.
+      // 서술은 부가 기능이다 — 여기서 실패해도 이미 계산이 끝난 주 답변은 그대로 나가야 한다.
+      const question = [...messages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? "";
+      let dual = null;
+      try {
+        dual = await narrateDual(client, String(question), trace);
+      } catch (err) {
+        console.error("D3 서술 생성 실패 — 주 답변은 그대로 반환", err);
+      }
+      return Response.json({ text, trace, blocked, dual });
     }
     msgs.push({ role: "assistant", content: res.content });
     const results: Anthropic.ToolResultBlockParam[] = [];

@@ -61,7 +61,7 @@ export function calculateEnvBenefit(input: EnvBenefitInput): EnvBenefitSummary {
       railAirCostPerTonKm: input.railAirCostPerTonKm,
       roadAirCostPerTonKm: input.roadAirCostPerTonKm,
       unitCostSource: input.unitCostSource,
-      formula: "탄소 = 톤킬로 × (도로 − 철도 원단위) ÷ 1,000,000 · 대기오염 = 톤킬로 × (도로 − 철도 비용원단위)",
+      formula: "운송량 × 거리에 도로·철도 각각의 국토교통부 공식 기준값을 곱해 그 차액을 냅니다",
     },
   };
 }

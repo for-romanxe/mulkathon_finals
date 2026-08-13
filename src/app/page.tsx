@@ -311,9 +311,12 @@ export default function Home() {
           <div className="mt-1 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">전환 편익 상담.</h1>
-              <p className="mt-0.5 text-sm text-[#112d4e]/60">
+              <p className="mt-1 text-sm text-[#112d4e]/75">
+                화물을 트럭에서 철도로 옮기면 무엇이 얼마나 나아지는지, <strong className="font-semibold text-[#112d4e]">실제 운송 실적으로</strong> 계산해 드립니다.
+              </p>
+              <p className="mt-0.5 text-xs text-[#112d4e]/45">
                 {summary
-                  ? `화물열차 ${summary.source.trains}편과 2025년 실제 운송실적 ${summary.source.od_records.toLocaleString()}건을 근거로 답합니다`
+                  ? `화물열차 ${summary.source.trains}편 · 2025년 하반기 운송실적 ${summary.source.od_records.toLocaleString()}건 기준`
                   : "데이터 불러오는 중…"}
               </p>
             </div>

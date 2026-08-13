@@ -14,9 +14,9 @@ const TOOL_LABEL: Record<string, string> = {
   c1_env_benefit: "탄소·대기오염 절감 계산",
   c2_social_benefit: "교통사고·혼잡 절감 계산",
   b4_directional: "돌아오는 화물 확인",
-  b5_backhaul: "B5 복화 가능성",
-  b1_dwell_breakdown: "B1 체류시간",
-  b2_x_factor: "B2 X-factor",
+  b5_backhaul: "돌아올 때 실을 화물 찾기",
+  b1_dwell_breakdown: "역에 서 있는 시간 분석",
+  b2_x_factor: "실제 걸리는 시간 계산",
 };
 
 const EXAMPLES = [

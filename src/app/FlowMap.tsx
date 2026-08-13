@@ -161,7 +161,7 @@ export default function FlowMap({
         </text>
         {[
           ["#c2410c", "거의 편도"],
-          ["#e08b2c", "편방향 심함"],
+          ["#e08b2c", "돌아올 화물 적음"],
           ["#7ba3d0", "일부 복화"],
           ["#3f72af", "양방향"],
         ].map(([c, label], i) => (

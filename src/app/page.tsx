@@ -29,8 +29,8 @@ const SOURCES: [string, string][] = [
   ["화물열차 시간표", "공공데이터포털 15042241 · 330편 8,972행"],
   ["화물취급역 명부", "공공데이터포털 15042207 · 2019년 기준"],
   ["선구별 운행횟수", "공공데이터포털 15068417 · 15068420"],
-  ["수송통계 O-D", "국가철도공단 API · 10,245건 (2025)"],
-  ["편익 원단위", "국토부 「교통시설 투자평가지침」 고시 2022-500호"],
+  ["구간별 운송 실적", "국가철도공단 API · 10,245건 · 2025 하반기 139일"],
+  ["편익 기준값", "국토부 「교통시설 투자평가지침」 고시 2022-500호"],
 ];
 
 type Card = { title: string; rows: [string, string][]; source: string; muted?: boolean };
@@ -47,10 +47,10 @@ function cardsFromTrace(trace: Trace[]): Card[] {
       title: "물량 · 거리",
       rows: [
         ["물량 (2025 하반기)", `${b3.ton?.toLocaleString()}톤`],
-        ["톤킬로", `${b3.tonkm?.toLocaleString()}`],
+        ["운송량 × 거리", `${b3.tonkm?.toLocaleString()}`],
         ["평균 거리", `${b3.km}km`],
       ],
-      source: "2025 수송통계 O-D — 코드 계산",
+      source: "2025 하반기(139일) 실제 운송 실적 — 코드 계산",
     });
   const b4 = last("b4_directional")?.output as
     | { found?: boolean; forward_ton?: number; reverse_ton?: number; reverse_share_pct?: number; one_way?: boolean }
@@ -520,7 +520,7 @@ export default function Home() {
                     )}
                   </div>
                   <p className="border-t border-[#dbe2ef] px-4 py-2.5 text-[10px] leading-relaxed text-[#112d4e]/40">
-                    2025 하반기(139일) O-D 중 2만 톤 이상 구간. 선 굵기 = 물량, 선 색 = 역방향 물량 비중. 역 위치는 지역 기준{" "}
+                    2025 하반기(139일) 실적 중 2만 톤 이상 구간. 선 굵기 = 물량, 선 색 = 역방향 물량 비중. 역 위치는 지역 기준{" "}
                     <strong>근사 좌표</strong>이며 측량값이 아닙니다.
                   </p>
                 </>
@@ -559,7 +559,7 @@ export default function Home() {
                     <ol className="space-y-2.5">
                       {allTrace.map((t, i) => {
                         const out = t.output as { found?: boolean; stub?: boolean; note?: string };
-                        const status = out?.stub ? ["원단위 대기", "#3f72af"] : out?.found === false ? ["데이터 없음", "#c2410c"] : ["계산 완료", "#15803d"];
+                        const status = out?.stub ? ["공식 기준값 대기", "#3f72af"] : out?.found === false ? ["데이터 없음", "#c2410c"] : ["계산 완료", "#15803d"];
                         return (
                           <li key={i} className="rounded-lg border border-[#dbe2ef] bg-[#f9f7f7] p-3">
                             <div className="flex items-center justify-between gap-2">
@@ -603,7 +603,7 @@ export default function Home() {
                     </tbody>
                   </table>
                   <p className="mt-4 rounded-lg border border-[#dbe2ef] bg-[#f9f7f7] p-3 text-[11px] leading-relaxed text-[#112d4e]/65">
-                    시간표와 O-D는 <strong className="text-[#112d4e]">역 단위로 강제 조인하지 않습니다</strong> — 조인율이 79%라
+                    시간표와 운송 실적은 <strong className="text-[#112d4e]">역 단위로 강제 조인하지 않습니다</strong> — 조인율이 79%라
                     부산신항·신광양항 같은 역이 누락되기 때문입니다. 두 데이터는 따로 쓰고, 답할 수 없는 질문은 그대로 답할 수
                     없다고 말합니다.
                   </p>

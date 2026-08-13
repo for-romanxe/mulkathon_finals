@@ -17,9 +17,19 @@
 
 ```bash
 npm install
-cp .env.example .env   # 아래 키 2개 채우기
-python3 scripts/build_data.py   # data/raw/ 원본 → public/data/*.json
+cp .env.example .env   # 아래 키 채우기
+python3 scripts/normalize.py   # data/raw/ 원본 → public/data/*.json
 npm run dev
+```
+
+`normalize.py` 는 `data/raw/` 에서 이 5개를 이름 그대로 찾는다. 하나라도 없으면 `FileNotFoundError` 로 떨어진다.
+
+```
+data/raw/timetable_15042241.csv              화물열차 시간표 (cp949)
+data/raw/freight_stations_15042207.csv       화물취급역 명부 (cp949)
+data/raw/runcount_weekday_15068417.csv       선구별 운행횟수 평일 (cp949)
+data/raw/runcount_weekend_15068420.csv       선구별 운행횟수 주말 (cp949)
+data/raw/freight_train.json                  수송통계 O-D
 ```
 
 `.env` (커밋 금지):
@@ -27,13 +37,15 @@ npm run dev
 | 키 | 용도 |
 |---|---|
 | `ANTHROPIC_API_KEY` | LLM 라우팅 (`/api/chat`) |
-| `DATA_GO_KR_KEY` | 수송통계 API 재수집 (`build_data.py --fetch`) |
+| `DATA_GO_KR_KEY_ENC` | 수송통계 API 재수집용 — **재수집 경로는 아직 미구현**(#64) |
 
 검증은 전부 `bash scripts/smoke.sh` 하나로 한다 (빌드 + 데이터 + 파이썬 문법).
 
 ## 배포
 
-- 제출 링크: (Vercel 별칭 도메인 — #23에서 기록)
+- 제출 링크: <https://rail-console-for-romanxe1.vercel.app>
+
+`https://rail-console.vercel.app` 는 A1 플레이스홀더를 서빙 중인 **다른 프로젝트**다. 제출에 쓰지 않는다.
 
 ## 데이터 출처
 
@@ -42,9 +54,9 @@ npm run dev
 | 화물열차 시간표 | 공공데이터포털 15042241 | cp949 · 시각 셀에 30초 값 존재 → **초 단위로 계산** |
 | 화물취급역 명부 | 공공데이터포털 15042207 | 2019년 기준 명부 |
 | 선구별 운행횟수 | 공공데이터포털 15068417·15068420 | 평일/주말, 빈 칸 = 0회 |
-| 수송통계 O-D | 국가철도공단 수송통계 API | 스냅샷 창에 따라 건수 변동 — `meta.json`의 기간 확인 |
+| 수송통계 O-D | 공공데이터포털 수송통계 API | 스냅샷 창에 따라 건수 변동 — `public/data/summary.json` 의 `source.od_stat_date` 확인 |
 
-**원본(`data/raw/`)은 재배포 금지 조건이라 커밋하지 않는다.** 받는 방법은 `scripts/build_data.py`의 오류 메시지에 있다.
+**원본(`data/raw/`)은 재배포 금지 조건이라 커밋하지 않는다.** 위 5개 파일명 그대로 각 출처에서 내려받아 `data/raw/` 에 둔다.
 
 시간표 실측 검증치 (두 사람이 독립 재현): 중간역 화물취급 정차 **5,094분** · 승무원교대 3,230분 · 운전취급 1,749분 · 정차 비중 **22.8%** · X-factor **1.296**.
 

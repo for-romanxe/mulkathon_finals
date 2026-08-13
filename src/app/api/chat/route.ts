@@ -3,13 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, runTool, gateTool } from "@/lib/orchestrator";
 import { narrateDual } from "@/lib/narrate/dual";
 import { checkScope, refusalText } from "@/lib/narrate/scope";
-
-const SYSTEM = `너는 코레일 영업 담당자가 화주 미팅에서 쓰는 철도 전환 편익 오케스트레이터다.
-규칙:
-- 숫자를 직접 계산하거나 추정하지 마라. 반드시 도구를 호출하고 그 반환값만 인용한다.
-- 도구가 found:false를 주면 그 구간·품목은 데이터에 없는 것이다. 아는 척하지 말고 한계를 그대로 말한다.
-- 도구가 stub:true를 주면 "원단위 확정 전이라 금액은 아직 계산할 수 없다"고 명시한다.
-- 답은 화주가 이해할 한국어 2~4문장. 근거 수치는 도구 반환값 그대로.`;
+import { ROUTING_SYSTEM } from "@/lib/narrate/prompts";
 
 type Trace = { tool: string; input: unknown; output: unknown };
 
@@ -38,7 +32,7 @@ export async function POST(req: Request) {
     const res = await client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1024,
-      system: SYSTEM,
+      system: ROUTING_SYSTEM,
       tools: TOOLS,
       messages: msgs,
     });

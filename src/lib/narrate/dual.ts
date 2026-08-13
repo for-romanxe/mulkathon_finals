@@ -5,6 +5,7 @@
 // 숫자는 같아야 하고 논지만 달라야 한다. 숫자가 갈리면 둘 중 하나는 지어낸 것이다.
 import Anthropic from "@anthropic-ai/sdk";
 import { allowedFigures, unsupportedFigures, type Trace } from "./figures";
+import { FIELD_NAME_RULE } from "./prompts";
 
 export const NARRATION_SYSTEM = `너는 코레일 영업 담당자가 화주 미팅에서 쓰는 자료를 쓴다.
 아래 도구 호출 결과만 근거로, 같은 사실을 두 상대에게 다르게 설명하라.
@@ -17,6 +18,7 @@ export const NARRATION_SYSTEM = `너는 코레일 영업 담당자가 화주 미
 - 두 서술은 반드시 같은 수치를 인용한다. 논지와 어휘만 다르다.
 - 원단위가 확정되지 않아 stub:true가 온 항목은 금액을 말하지 말고 "확정 전"이라고 밝힌다.
 - found:false인 구간은 없는 것이다. 추정하지 마라.
+${FIELD_NAME_RULE}
 - 각 서술 2~4문장, 한국어.
 
 반드시 이 JSON만 출력한다: {"shipper":"...","policy":"..."}`;

@@ -5,6 +5,8 @@ import path from "node:path";
 import { lookupOd, type OdRow } from "./calc/od";
 import { summarizeDwell, type Train } from "./calc/dwell";
 import { calculateXFactor } from "./calc/x-factor";
+import { calculateSocialBenefit } from "./calc/social-benefit";
+import { SOCIAL_UNIT_COSTS, missingUnitCosts } from "./calc/unit-costs";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
 let odCache: OdRow[] | null = null;
@@ -94,12 +96,58 @@ export async function b4Directional(input: { from: string; to: string }) {
   };
 }
 
-// C1(#35)·C2(#37) — 원단위 확정 전 스텁. 수치를 지어내지 않는다.
+// C1(#35) — 원단위 확정 전 스텁. 수치를 지어내지 않는다.
 export function c1EnvBenefit(input: { tonkm: number }) {
   return { stub: true, need: "탄소·대기오염 원단위(원/톤킬로) — 국토부 투자평가지침에서 확정(#35)", tonkm: input.tonkm };
 }
-export function c2SocialBenefit(input: { tonkm: number }) {
-  return { stub: true, need: "교통사고·도로혼잡 원단위(원/톤킬로) — 확정 전(#37)", tonkm: input.tonkm };
+
+// C2(#37) — 승빈이 만든 calc/social-benefit.ts 를 실제로 연결한다.
+// 원단위(#86)가 없으면 금액은 못 내지만, **무엇이 없어서 못 내는지는 말할 수 있다.**
+// 스텁이 "확정 전"만 반복하던 것과 달리, 계산식과 남은 항목을 그대로 돌려준다.
+export function c2SocialBenefit(input: { tonkm: number; ton: number; km: number }) {
+  const missing = missingUnitCosts();
+  if (missing.length)
+    return {
+      stub: true,
+      need: `사회 편익 금액은 원단위가 확정돼야 산출된다 (#86). 남은 값: ${missing.join(" · ")}`,
+      formula: "트럭대수 = 물량톤 ÷ 적재량 · 차량km = 트럭대수 × 거리 · 편익 = 차량km × 원단위",
+      ton: input.ton,
+      km: input.km,
+      tonkm: input.tonkm,
+    };
+
+  // 원단위가 채워진 뒤에는 calculateSocialBenefit이 음수·NaN에 RangeError를 던진다.
+  // route.ts에 도구 실행 try/catch가 없어 그대로 500 HTML이 나가고, 화면에는
+  // "서버 응답이 JSON이 아님"만 뜬다 — 도구 결과로 돌려주는 게 맞다(#87).
+  const u = SOCIAL_UNIT_COSTS;
+  let s: ReturnType<typeof calculateSocialBenefit>;
+  try {
+    s = calculateSocialBenefit({
+      railTon: input.ton,
+      distanceKm: input.km,
+      truckPayloadTon: u.truckPayloadTon as number,
+      accidentCostPerVehicleKm: u.accidentCostPerVehicleKm as number,
+      congestionCostPerVehicleKm: u.congestionCostPerVehicleKm as number,
+      unitCostSource: u.source as string,
+    });
+  } catch (err) {
+    return {
+      stub: true,
+      need: `사회 편익을 계산할 수 없다: ${err instanceof Error ? err.message : String(err)}`,
+      ton: input.ton,
+      km: input.km,
+      tonkm: input.tonkm,
+    };
+  }
+  return {
+    stub: false,
+    truck_trips: Math.round(s.truckTrips),
+    avoided_truck_vehicle_km: r1(s.avoidedTruckVehicleKm),
+    avoided_accident_cost_won: Math.round(s.avoidedAccidentCost),
+    avoided_congestion_cost_won: Math.round(s.avoidedCongestionCost),
+    total_social_benefit_won: Math.round(s.totalSocialBenefit),
+    basis: s.basis,
+  };
 }
 
 export const TOOLS = [
@@ -133,12 +181,16 @@ export const TOOLS = [
   {
     name: "c2_social_benefit",
     description:
-      "도로 대비 철도 전환의 사회 편익(교통사고·도로혼잡)을 톤킬로 기준으로 계산한다. " +
+      "도로 대비 철도 전환의 사회 편익(교통사고·도로혼잡)을 계산한다. 물량을 트럭 대수와 차량km로 환산한 뒤 원단위를 적용한다. " +
       "사용자가 편익·사회적 효과·사고·혼잡을 물었을 때만 호출한다. 물량·방향·복화만 묻는 질문에는 호출하지 않는다.",
     input_schema: {
       type: "object" as const,
-      properties: { tonkm: { type: "number", description: "B3가 반환한 톤킬로" } },
-      required: ["tonkm"],
+      properties: {
+        tonkm: { type: "number", description: "B3가 반환한 톤킬로" },
+        ton: { type: "number", description: "B3가 반환한 물량(톤)" },
+        km: { type: "number", description: "B3가 반환한 평균거리(km)" },
+      },
+      required: ["tonkm", "ton", "km"],
     },
   },
   {
@@ -181,11 +233,11 @@ export function gateTool(
   trace: { tool: string; output: unknown }[],
 ): { blocked: true; note: string } | null {
   const ran = (tool: string) => trace.some((t) => t.tool === tool);
-  // B3가 실제로 돌려준 톤킬로. 편익은 이 값으로만 계산한다 — 모델이 지어낸 수치 차단.
-  const fromB3 = trace
+  // B3가 실제로 돌려준 출력들. 편익은 이 값으로만 계산한다 — 모델이 지어낸 수치 차단.
+  const b3Outputs = trace
     .filter((t) => t.tool === "b3_od_lookup")
-    .map((t) => (t.output as { tonkm?: number }).tonkm)
-    .filter((v): v is number => typeof v === "number");
+    .map((t) => t.output as { tonkm?: number; ton?: number; km?: number | null });
+  const fromB3 = b3Outputs.map((o) => o.tonkm).filter((v): v is number => typeof v === "number");
 
   if (name === "c1_env_benefit" || name === "c2_social_benefit") {
     if (!fromB3.length)
@@ -194,6 +246,24 @@ export function gateTool(
       return { blocked: true, note: `tonkm이 B3 반환값과 다르다 (B3가 준 값: ${fromB3.join(", ")}) — 그 값을 그대로 넣을 것` };
     if (name === "c2_social_benefit" && !ran("c1_env_benefit"))
       return { blocked: true, note: "c1_env_benefit을 먼저 호출할 것 — 편익은 환경(C1) 다음 사회(C2) 순으로 서술한다" };
+
+    // C2는 tonkm 말고 ton·km으로 트럭 환산을 한다(#87). 세 값이 **같은 B3 출력**에서
+    // 나왔는지 본다 — 따로따로 대조하면 서로 다른 구간의 값을 섞어 넣을 수 있고,
+    // 원단위(#86)가 채워지는 순간 그 조합이 "코드가 계산한" 금액이 된다(#89).
+    if (name === "c2_social_benefit") {
+      const match = b3Outputs.find(
+        (o) => o.tonkm === input.tonkm && o.ton === input.ton && o.km === input.km,
+      );
+      if (!match) {
+        const shown = b3Outputs
+          .map((o) => `{ton: ${o.ton}, km: ${o.km}, tonkm: ${o.tonkm}}`)
+          .join(" · ");
+        return {
+          blocked: true,
+          note: `ton·km·tonkm이 한 B3 결과와 일치해야 한다 — 세 값을 같은 조회에서 그대로 가져올 것. B3가 준 것: ${shown}`,
+        };
+      }
+    }
   }
 
   // B4는 편익 서술 뒤에 온다. 다만 **편익을 실제로 다루는 흐름에서만** 그렇다.
@@ -217,7 +287,7 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
     case "c1_env_benefit":
       return c1EnvBenefit(input as { tonkm: number });
     case "c2_social_benefit":
-      return c2SocialBenefit(input as { tonkm: number });
+      return c2SocialBenefit(input as { tonkm: number; ton: number; km: number });
     case "b1_dwell_breakdown":
       return b1DwellBreakdown();
     case "b2_x_factor":

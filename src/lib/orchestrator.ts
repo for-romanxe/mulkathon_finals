@@ -109,20 +109,35 @@ export const TOOLS = [
 // C1·C2는 B3가 실제로 반환한 톤킬로만 받는다. 이 검사가 없으면 LLM이 지어낸 톤킬로로
 // 편익이 계산되고, 그건 "숫자 계산을 LLM에 시키지 않는다"(#39)가 깨진 것이다.
 // 반환값이 null이 아니면 도구를 실행하지 않고 이 값을 그대로 도구 결과로 돌려준다.
+// 완료 조건(#39)이 요구하는 호출 순서는 B3 → C1 → C2 → B4 다. 도구 설명만으로는
+// 안 지켜졌다 — 라이브 검증에서 모델이 B3→B4→C1→C2 로 불렀다. trace 상태로 강제한다.
+// 막힌 호출은 실행하지 않고 note만 돌려주며, route.ts가 trace에 남기지 않는다.
 export function gateTool(
   name: string,
   input: Record<string, unknown>,
   trace: { tool: string; output: unknown }[],
 ): { blocked: true; note: string } | null {
-  if (name !== "c1_env_benefit" && name !== "c2_social_benefit") return null;
+  const ran = (tool: string) => trace.some((t) => t.tool === tool);
+  // B3가 실제로 돌려준 톤킬로. 편익은 이 값으로만 계산한다 — 모델이 지어낸 수치 차단.
   const fromB3 = trace
     .filter((t) => t.tool === "b3_od_lookup")
     .map((t) => (t.output as { tonkm?: number }).tonkm)
     .filter((v): v is number => typeof v === "number");
-  if (!fromB3.length)
-    return { blocked: true, note: "b3_od_lookup을 먼저 호출할 것 — 편익은 B3가 반환한 톤킬로로만 계산한다" };
-  if (typeof input.tonkm !== "number" || !fromB3.includes(input.tonkm))
-    return { blocked: true, note: `tonkm이 B3 반환값과 다르다 (B3가 준 값: ${fromB3.join(", ")}) — 그 값을 그대로 넣을 것` };
+
+  if (name === "c1_env_benefit" || name === "c2_social_benefit") {
+    if (!fromB3.length)
+      return { blocked: true, note: "b3_od_lookup을 먼저 호출할 것 — 편익은 B3가 반환한 톤킬로로만 계산한다" };
+    if (typeof input.tonkm !== "number" || !fromB3.includes(input.tonkm))
+      return { blocked: true, note: `tonkm이 B3 반환값과 다르다 (B3가 준 값: ${fromB3.join(", ")}) — 그 값을 그대로 넣을 것` };
+    if (name === "c2_social_benefit" && !ran("c1_env_benefit"))
+      return { blocked: true, note: "c1_env_benefit을 먼저 호출할 것 — 편익은 환경(C1) 다음 사회(C2) 순으로 서술한다" };
+  }
+
+  // B4는 마지막이다. 다만 B3가 톤킬로를 못 준 구간이면 C1·C2가 성립하지 않으므로
+  // 무한 대기 대신 바로 통과시킨다 (데이터에 없는 구간을 "모른다"고 답하는 경로).
+  if (name === "b4_directional" && fromB3.length && !(ran("c1_env_benefit") && ran("c2_social_benefit")))
+    return { blocked: true, note: "c1_env_benefit·c2_social_benefit을 먼저 호출할 것 — 복화 판정은 편익 서술 뒤에 온다" };
+
   return null;
 }
 

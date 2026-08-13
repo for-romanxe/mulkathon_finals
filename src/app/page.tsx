@@ -360,8 +360,12 @@ export default function Home() {
               <p className="text-sm">
                 <strong>돌아오는 화물이 없습니다.</strong>{" "}
                 <span className="text-[#112d4e]/70">
+                  {/* KPI 카드와 같은 계산값(summarizeBackhaul)을 쓴다. summary.json의
+                      dominant_dir_ton_pct(84.7)는 톤 기준이라 발표 헤드라인(63.5%, 쌍 기준)과
+                      다르다 — 한 화면에 두 숫자가 뜨면 안 된다. 문구는 #110 금지어를 피해
+                      화주 말로 쓴다("편방향" ✗ / "한쪽으로만 화물이 흐른다" ○). */}
                   {backhaul
-                    ? `전국 ${backhaul.pairs}개 구간 중 ${backhaul.oneWay}개는 한쪽으로만 화물이 흐릅니다. 돌아올 때 실을 수 있는 화물은 ${backhaul.backhaulPct}%뿐이라, 전환 편익에는 이 회송 부담이 반영돼야 합니다.`
+                    ? `전국 ${backhaul.pairs}개 구간 중 ${backhaul.oneWay}개(${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%)는 한쪽으로만 화물이 흐릅니다. 돌아올 때 실을 수 있는 화물은 ${backhaul.backhaulPct}%뿐이라, 전환 편익에는 이 회송 부담이 반영돼야 합니다.`
                     : "전국 구간 대부분이 한쪽으로만 화물이 흐릅니다. 전환 편익에는 이 회송 부담이 반영돼야 합니다."}
                 </span>
               </p>

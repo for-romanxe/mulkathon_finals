@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, runTool, gateTool } from "@/lib/orchestrator";
 import { narrateDual } from "@/lib/narrate/dual";
 import { checkScope, refusalText } from "@/lib/narrate/scope";
-import { ROUTING_SYSTEM } from "@/lib/narrate/prompts";
+import { routingSystemFor } from "@/lib/narrate/prompts";
 
 type Trace = { tool: string; input: unknown; output: unknown };
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const res = await client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1024,
-      system: ROUTING_SYSTEM,
+      system: routingSystemFor(String(asked)),
       tools: TOOLS,
       messages: msgs,
     });

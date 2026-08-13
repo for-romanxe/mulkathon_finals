@@ -252,12 +252,22 @@ export default function Home() {
         ]
       : summary
         ? [
+            // 질문 전 첫 화면에 반드시 남는다(주영 지시). 심사위원이 링크를 열자마자 보는
+            // 우리 핵심 발견이라, 구간을 묻기 전에도 떠 있어야 한다.
+            {
+              label: "돌아올 때 빈 차로 오는 구간",
+              value: backhaul ? `${((backhaul.oneWay / backhaul.pairs) * 100).toFixed(1)}%` : "—",
+              note: backhaul
+                ? `${backhaul.pairs}개 구간 중 ${backhaul.oneWay}개 · 돌아올 때 실을 화물은 ${backhaul.backhaulPct}%뿐`
+                : "집계 중",
+              warn: true,
+            },
             {
               label: "철도로 옮긴 화물",
               value: `${(summary.od.total_ton / 10000).toFixed(0)}만 톤`,
               note: "2025년 8~12월 실제 운송실적",
             },
-            { label: "다루는 구간", value: `${summary.od.pairs_undirected}개`, note: "전국 화물 O-D 구간 전수" },
+            { label: "다루는 구간", value: `${summary.od.pairs_undirected}개`, note: "전국 화물 구간 전수" },
             { label: "분석한 화물열차", value: `${summary.source.trains}편`, note: "전국 화물열차 시간표 전수" },
           ]
         : [];

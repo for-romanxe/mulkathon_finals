@@ -66,13 +66,34 @@ export async function b2XFactor() {
   };
 }
 
+// 못 찾은 역명과 이름이 닿는 **실제 역**을 데이터에서 찾아 준다 — 추정이 아니라 실적에 있는 역만.
+// 도시 이름(부산·광양)으로 물었을 때 화물역명(부산진·부산신항)으로 안내하기 위한 것.
+function nearbyStations(od: OdRow[], name: string): string[] {
+  const all = new Set<string>();
+  for (const r of od) {
+    if (r.ton > 0) {
+      all.add(r.from);
+      all.add(r.to);
+    }
+  }
+  return [...all].filter((s) => s !== name && (s.includes(name) || name.includes(s))).slice(0, 4);
+}
+
 // B3(#29) — OD 물량·톤킬로 조회
 export async function b3OdLookup(input: { from: string; to: string; item?: string }) {
   const od = await loadOd();
   if (!od) return { found: false, note: "od_stats.json 없음 — 데이터 파이프라인 산출물 확인" };
   const result = lookupOd(od, input);
-  if (!result)
-    return { found: false, note: `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것` };
+  if (!result) {
+    const alt = [...nearbyStations(od, input.from), ...nearbyStations(od, input.to)];
+    return {
+      found: false,
+      ...(alt.length ? { similar_stations: alt } : {}),
+      note: alt.length
+        ? `${input.from}→${input.to} 구간은 2025 수송통계에 없음. 다만 실적이 있는 역 중 이름이 비슷한 곳: ${alt.join(", ")} — 이 역 기준이면 조회해 보겠다고 안내할 것. 없는 구간을 추정하지 말 것`
+        : `${input.from}→${input.to} 구간은 2025 수송통계에 없음 — 모른다고 답할 것`,
+    };
+  }
   if (input.item && !result.ton)
     return {
       found: false,

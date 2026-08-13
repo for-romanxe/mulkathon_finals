@@ -1,0 +1,15 @@
+# 시크릿 — 절대 커밋 금지
+secrets.env
+.env
+.env.*
+
+# KTDB 원본 (재배포 금지)
+ktdb/
+*.ktdb
+
+# 빌드 산출물
+node_modules/
+.next/
+dist/
+__pycache__/
+.DS_Store

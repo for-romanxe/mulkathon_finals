@@ -48,7 +48,7 @@ gh pr checkout <n>
 |---|---|
 | 팀원 approve 1개 이상 | 아래 "approve 판정" 참고 |
 | 빌드/체크 통과 | statusCheckRollup 전부 성공. 체크가 아예 없으면 로컬에서 `bash scripts/smoke.sh` 직접 돌려서 통과 확인 |
-| 변경량 ≤ 200줄 | additions + deletions <= 200 |
+| 변경량 ≤ 200줄 | additions + deletions <= 200. **단, lock 파일(package-lock.json 등)·생성 파일은 계산에서 제외** — `gh pr diff <n> --name-only`로 확인해 해당 파일 분량을 빼고 판단한다 |
 | 충돌 없음 | mergeable == "MERGEABLE" |
 
 **approve 판정 (순서대로):**

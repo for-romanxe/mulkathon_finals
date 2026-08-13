@@ -410,14 +410,14 @@ export default function Home() {
                           {cardsFromTrace(m.trace).map((c, j) => (
                             <div
                               key={j}
-                              className={`rounded-lg border bg-white p-3 ${c.muted ? "border-dashed border-[#dbe2ef]" : "border-[#dbe2ef]"}`}
+                              className={`rounded-lg border bg-white p-3 ${c.muted ? "border-dashed border-[#dbe2ef] sm:col-span-2" : "border-[#dbe2ef]"}`}
                             >
                               <p className="text-[11px] font-semibold text-[#3f72af]">{c.title}</p>
                               <dl className="mt-1.5 space-y-1">
                                 {c.rows.map(([k, v], r) => (
                                   <div key={r} className="flex justify-between gap-3 text-xs">
-                                    <dt className="text-[#112d4e]/50">{k}</dt>
-                                    <dd className="font-semibold tabular-nums">{v}</dd>
+                                    <dt className="shrink-0 whitespace-nowrap text-[#112d4e]/50">{k}</dt>
+                                    <dd className="text-right font-semibold tabular-nums break-words">{v}</dd>
                                   </div>
                                 ))}
                               </dl>

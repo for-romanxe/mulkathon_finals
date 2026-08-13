@@ -39,22 +39,26 @@ export const STATION_GEO: Record<string, [number, number]> = {
   남철송장: [35.11, 129.03],
 };
 
-// 지도 좌표계 — 위경도를 viewBox(0 0 400 520)로 투영한다.
+// 지도 좌표계 — 실제 시도 경계(korea-geo.ts) 범위에 맞춰 투영한다.
+// 위도 1°와 경도 1°의 실거리 차이를 반영해 형태가 찌그러지지 않게 한다.
 export const VIEW_W = 400;
-export const VIEW_H = 520;
-const LON0 = 125.9;
-const LON1 = 129.9;
-const LAT0 = 38.8;
-const LAT1 = 34.3;
+export const VIEW_H = 560;
+const LAT_TOP = 38.7;
+const LAT_BOTTOM = 33.1;
+const LON_LEFT = 125.8;
+const LON_RIGHT = 129.7;
+const KM_PER_LAT = 111;
+const KM_PER_LON = 91; // 북위 35° 기준
+const PAD = 14;
+const SCALE = Math.min(
+  (VIEW_H - PAD * 2) / ((LAT_TOP - LAT_BOTTOM) * KM_PER_LAT),
+  (VIEW_W - PAD * 2) / ((LON_RIGHT - LON_LEFT) * KM_PER_LON),
+);
+const OFFSET_X = (VIEW_W - (LON_RIGHT - LON_LEFT) * KM_PER_LON * SCALE) / 2;
 
 export function project(lat: number, lon: number): [number, number] {
-  return [((lon - LON0) / (LON1 - LON0)) * VIEW_W, ((LAT0 - lat) / (LAT0 - LAT1)) * VIEW_H];
+  return [
+    OFFSET_X + (lon - LON_LEFT) * KM_PER_LON * SCALE,
+    PAD + (LAT_TOP - lat) * KM_PER_LAT * SCALE,
+  ];
 }
-
-export const REGION_LABELS: { name: string; lat: number; lon: number }[] = [
-  { name: "수도권", lat: 37.62, lon: 126.6 },
-  { name: "강원", lat: 37.75, lon: 128.5 },
-  { name: "충청", lat: 36.6, lon: 126.5 },
-  { name: "호남", lat: 35.3, lon: 126.6 },
-  { name: "영남", lat: 35.9, lon: 129.2 },
-];

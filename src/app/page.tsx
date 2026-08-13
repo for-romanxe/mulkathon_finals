@@ -482,7 +482,7 @@ export default function Home() {
 
               {view === "map" && (
                 <>
-                  <div className="min-h-0 flex-1 p-2">
+                  <div className="min-h-0 max-h-[52vh] flex-1 p-2">
                     {flows.length > 0 ? (
                       <FlowMap
                         flows={flows}

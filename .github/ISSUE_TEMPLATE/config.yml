@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📌 팀 규칙 (커밋·PR·이슈·리뷰 양식 + 머지 기준)
+    url: https://github.com/for-romanxe/mulkathon_finals/issues/58
+    about: 이슈를 만들기 전에 양식과 완료 조건 규칙을 먼저 볼 것
+  - name: 루프 규칙 원본 (hack.md)
+    url: https://github.com/for-romanxe/mulkathon_finals/blob/main/.claude/commands/hack.md
+    about: 우선순위 사다리·머지 조건·가드레일의 단일 원본

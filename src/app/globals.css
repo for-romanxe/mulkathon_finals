@@ -1,26 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --paper: #f9f7f7;
+  --mist: #dbe2ef;
+  --steel: #3f72af;
+  --navy: #112d4e;
+  --background: var(--paper);
+  --foreground: var(--navy);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 활성 구간 위를 흐르는 점 (FlowMap) */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -16;
+  }
 }

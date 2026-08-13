@@ -30,7 +30,7 @@ const RULES: Array<OutOfScope & { patterns: RegExp[] }> = [
     ],
     reason:
       "운송 신청·예약·배차는 저희가 만들지 않았습니다. 코레일이 구축 중인 플랫폼의 몫이고, 저희는 그 위에 얹는 진단 계층입니다.",
-    instead: "그 구간의 물량·거리·편방향 여건과 전환 편익은 지금 바로 알려드릴 수 있습니다.",
+    instead: "그 구간의 물량과 운송거리, 돌아올 때 실을 화물이 있는지는 지금 바로 알려드릴 수 있습니다.",
   },
   {
     category: "realtime",
@@ -58,9 +58,9 @@ const RULES: Array<OutOfScope & { patterns: RegExp[] }> = [
       /얼마.*(?<![줄늘]어)(들[까든지]|드[나니]|나옵)/,
     ],
     reason:
-      "운임·요금은 저희 데이터에 없습니다. 수송통계는 물량(톤·톤킬로)만 담고 금액을 담지 않습니다.",
+      "운임·요금은 저희 데이터에 없습니다. 저희가 보는 수송 실적에는 물량과 운송거리만 있고 금액이 없습니다.",
     instead:
-      "전환 물량과 거리는 정확히 드릴 수 있고, 편익 원단위가 확정되면 사회적 편익 금액은 계산해 드립니다.",
+      "전환 물량과 거리는 정확히 드릴 수 있고, 국토교통부 공식 기준값이 확정되면 사회적 편익 금액도 계산해 드립니다.",
   },
   {
     category: "raw-data",
@@ -82,7 +82,13 @@ export function checkScope(question: string): OutOfScope | null {
   return null;
 }
 
-/** 거절문. 왜 못 하는지와 대신 무엇을 할 수 있는지를 반드시 함께 말한다. */
+/**
+ * 거절문. 왜 못 하는지와 대신 무엇을 할 수 있는지를 반드시 함께 말한다.
+ *
+ * ⚠️ 이 문자열은 **LLM을 거치지 않고 화주에게 그대로 나간다.** 프롬프트의 어휘 규칙(#110)이
+ *    적용되지 않으므로, 여기 쓰는 말은 직접 화주 언어로 골라야 한다.
+ *    금지: 톤킬로 · 원단위 · 편방향 · O-D · stub · 영문 코드명.
+ */
 export function refusalText(scope: OutOfScope): string {
   return `${scope.reason}\n\n${scope.instead}`;
 }

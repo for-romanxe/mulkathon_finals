@@ -3,6 +3,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { lookupOd, type OdRow } from "./calc/od";
+import { summarizeDwell, type Train } from "./calc/dwell";
+import { calculateXFactor } from "./calc/x-factor";
 
 // od_stats.json(#56): 방향 있는 (from,to) 쌍으로 이미 집계된 상태
 let odCache: OdRow[] | null = null;
@@ -17,7 +19,47 @@ async function loadOd(): Promise<OdRow[] | null> {
   }
 }
 
+// trains.json(#56): 열차 330편의 정차 시퀀스. B1·B2 계산 함수의 입력이다.
+let trainCache: Train[] | null = null;
+async function loadTrains(): Promise<Train[] | null> {
+  if (trainCache) return trainCache;
+  try {
+    const p = path.join(process.cwd(), "public", "data", "trains.json");
+    trainCache = JSON.parse(await fs.readFile(p, "utf-8")) as Train[];
+    return trainCache;
+  } catch {
+    return null;
+  }
+}
+
 const r1 = (x: number) => Math.round(x * 10) / 10;
+
+// B1(#26) — 정차사유별 체류시간. "왜 이렇게 느린가"에 답하는 자리다.
+export async function b1DwellBreakdown() {
+  const trains = await loadTrains();
+  if (!trains) return { found: false, note: "trains.json 없음 — 데이터 파이프라인 산출물 확인" };
+  const s = summarizeDwell(trains);
+  const byReason = Object.entries(s.dwellMinByReason)
+    .filter(([, min]) => min > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, min]) => ({ reason, min: r1(min) }));
+  return { found: true, trains: trains.length, total_dwell_min: r1(s.totalDwellMin), by_reason: byReason };
+}
+
+// B2(#28) — X-factor. 총 소요 ÷ 순수 주행.
+export async function b2XFactor() {
+  const trains = await loadTrains();
+  if (!trains) return { found: false, note: "trains.json 없음 — 데이터 파이프라인 산출물 확인" };
+  const x = calculateXFactor(trains);
+  return {
+    found: true,
+    x_factor: Math.round(x.xFactor * 1000) / 1000,
+    total_span_min: r1(x.totalSpanMin),
+    total_dwell_min: r1(x.totalDwellMin),
+    pure_running_min: r1(x.pureRunningMin),
+    dwell_share_pct: r1((x.totalDwellMin / x.totalSpanMin) * 100),
+  };
+}
 
 // B3(#29) — OD 물량·톤킬로 조회
 export async function b3OdLookup(input: { from: string; to: string; item?: string }) {
@@ -79,7 +121,9 @@ export const TOOLS = [
   },
   {
     name: "c1_env_benefit",
-    description: "도로 대비 철도 전환의 환경 편익(탄소·대기오염)을 톤킬로 기준으로 계산한다.",
+    description:
+      "도로 대비 철도 전환의 환경 편익(탄소·대기오염)을 톤킬로 기준으로 계산한다. " +
+      "사용자가 편익·환경 효과·탄소를 물었을 때만 호출한다. 물량·방향·복화만 묻는 질문에는 호출하지 않는다.",
     input_schema: {
       type: "object" as const,
       properties: { tonkm: { type: "number", description: "B3가 반환한 톤킬로" } },
@@ -88,7 +132,9 @@ export const TOOLS = [
   },
   {
     name: "c2_social_benefit",
-    description: "도로 대비 철도 전환의 사회 편익(교통사고·도로혼잡)을 톤킬로 기준으로 계산한다.",
+    description:
+      "도로 대비 철도 전환의 사회 편익(교통사고·도로혼잡)을 톤킬로 기준으로 계산한다. " +
+      "사용자가 편익·사회적 효과·사고·혼잡을 물었을 때만 호출한다. 물량·방향·복화만 묻는 질문에는 호출하지 않는다.",
     input_schema: {
       type: "object" as const,
       properties: { tonkm: { type: "number", description: "B3가 반환한 톤킬로" } },
@@ -106,6 +152,20 @@ export const TOOLS = [
       },
       required: ["from", "to"],
     },
+  },
+  {
+    name: "b1_dwell_breakdown",
+    description:
+      "화물열차가 역에서 머무는 시간을 정차사유별로 집계한다(화물취급·승무원교대·동력차교체·대피·교행 등, 분 단위). " +
+      "사용자가 소요시간·지연·왜 느린지·정차를 물었을 때 호출한다. 전 노선 330편 계획 시각표 기준이다.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "b2_x_factor",
+    description:
+      "X-factor를 산출한다 — 총 소요시간 ÷ 순수 주행시간. 1.3이면 주행만 했을 때보다 30% 더 걸린다는 뜻이다. " +
+      "정차가 전체 소요의 몇 %인지도 함께 준다. 소요시간·지연·정시성을 물었을 때 호출한다.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
   },
 ];
 
@@ -136,10 +196,14 @@ export function gateTool(
       return { blocked: true, note: "c1_env_benefit을 먼저 호출할 것 — 편익은 환경(C1) 다음 사회(C2) 순으로 서술한다" };
   }
 
-  // B4는 마지막이다. 다만 B3가 톤킬로를 못 준 구간이면 C1·C2가 성립하지 않으므로
-  // 무한 대기 대신 바로 통과시킨다 (데이터에 없는 구간을 "모른다"고 답하는 경로).
-  if (name === "b4_directional" && fromB3.length && !(ran("c1_env_benefit") && ran("c2_social_benefit")))
-    return { blocked: true, note: "c1_env_benefit·c2_social_benefit을 먼저 호출할 것 — 복화 판정은 편익 서술 뒤에 온다" };
+  // B4는 편익 서술 뒤에 온다. 다만 **편익을 실제로 다루는 흐름에서만** 그렇다.
+  //
+  // 이전에는 B3가 톤킬로를 주기만 하면 B4를 막았는데, 그러면 방향만 묻는 질문에서도
+  // 모델이 막힌 B4를 뚫으려고 C1·C2를 부르게 된다 — #78이 도구 설명을 고쳐도 안 없어진
+  // 이유가 이것이다. 편익 도구가 하나라도 돌았을 때만 "둘 다 돌았는가"를 따진다.
+  const benefitStarted = ran("c1_env_benefit") || ran("c2_social_benefit");
+  if (name === "b4_directional" && benefitStarted && !(ran("c1_env_benefit") && ran("c2_social_benefit")))
+    return { blocked: true, note: "c1_env_benefit·c2_social_benefit을 둘 다 호출할 것 — 편익은 환경·사회를 함께 서술한다" };
 
   return null;
 }
@@ -154,6 +218,10 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return c1EnvBenefit(input as { tonkm: number });
     case "c2_social_benefit":
       return c2SocialBenefit(input as { tonkm: number });
+    case "b1_dwell_breakdown":
+      return b1DwellBreakdown();
+    case "b2_x_factor":
+      return b2XFactor();
     default:
       return { error: `알 수 없는 도구: ${name}` };
   }

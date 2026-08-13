@@ -48,8 +48,24 @@ gh pr checkout <n>
 |---|---|
 | 팀원 approve 1개 이상 | 아래 "approve 판정" 참고 |
 | 빌드/체크 통과 | statusCheckRollup 전부 성공. 체크가 아예 없으면 로컬에서 `bash scripts/smoke.sh` 직접 돌려서 통과 확인 |
-| 변경량 ≤ 200줄 | additions + deletions <= 200 |
+| 변경량 ≤ 200줄 | **사람이 쓴 줄만** 센다 — 아래 "200줄 판정" 참고 |
 | 충돌 없음 | mergeable == "MERGEABLE" |
+
+**200줄 판정 — 생성물은 빼고 센다.**
+
+`additions + deletions`를 그대로 쓰면 `package-lock.json` 하나로 수천 줄이 나와서, 프레임워크 뼈대나 의존성 추가가 들어간 PR은 **아무리 쪼개도 통과할 수 없다.** 다음은 계산에서 제외한다:
+
+- 락 파일 — `package-lock.json` `pnpm-lock.yaml` `yarn.lock` `poetry.lock` `uv.lock`
+- 생성기 산출물 — `next-env.d.ts`, `.next/`, `dist/`, 기타 스캐폴드가 찍어낸 설정 파일
+- 에셋·바이너리 — `*.svg` `*.ico` `*.png` `*.jpg` `*.woff*`
+
+```bash
+gh pr diff <n> --patch | git apply --numstat - 2>/dev/null | \
+  grep -vE '(lock\.(json|yaml)|\.lock|next-env\.d\.ts|\.(svg|ico|png|jpg|woff2?)$)' | \
+  awk '{a+=$1; d+=$2} END {print a+d}'
+```
+
+이 값이 200 이하면 통과. **손으로 쓴 코드가 200줄을 넘으면 그건 여전히 쪼개야 한다** — 예외는 생성물에만 적용하고, 로직에는 적용하지 않는다.
 
 **approve 판정 (순서대로):**
 1. `reviewDecision == "APPROVED"` 이면 통과.
@@ -140,7 +156,7 @@ EOF
 
 `--reviewer`는 반드시 넣는다 (사람이 PR 목록에서 상태를 파악하기 쉽고, 알림이 간다. 루프는 reviewer 지정 여부와 무관하게 3단계에서 집는다).
 
-작업 중 5파일 / 200줄을 넘을 것 같으면 → 거기서 중단, in-progress 라벨 제거, "이 이슈 쪼개야 함: <이유>" 코멘트 남기고 이번 틱 종료.
+작업 중 5파일 / 200줄을 넘을 것 같으면 → 거기서 중단, in-progress 라벨 제거, "이 이슈 쪼개야 함: <이유>" 코멘트 남기고 이번 틱 종료. **여기서도 락 파일·생성기 산출물·에셋은 세지 않는다** (위 "200줄 판정" 참고). `npm install` 한 번으로 6,000줄이 늘었다고 이슈를 쪼개면 안 된다.
 
 ### 5. 할 일이 없다
 

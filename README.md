@@ -43,9 +43,9 @@ data/raw/freight_train.json                  수송통계 O-D
 
 ## 배포
 
-- 제출 링크: <https://rail-console-for-romanxe1.vercel.app>
+- 제출 링크: <https://rail-console.vercel.app>
 
-`https://rail-console.vercel.app` 는 A1 플레이스홀더를 서빙 중인 **다른 프로젝트**다. 제출에 쓰지 않는다.
+옛 주소 `https://rail-console-for-romanxe1.vercel.app` 는 더 이상 갱신되지 않는다. 제출·촬영에 쓰지 않는다 (`SUBMISSION.md` §1).
 
 ## 데이터 출처
 
